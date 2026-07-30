@@ -1,5 +1,5 @@
 """
-auto-dev-agentos — Verification harness core.
+evaloop — evaluation-driven autonomous development, core.
 
 Pure functions for verification, metric parsing, state management, and phase detection.
 Shared by run.py and usable as a library. No SDK dependency.
@@ -109,31 +109,35 @@ def progress_count(state_path: Path, conf: dict) -> int:
     return count_by_status(data, progress_q)
 
 
-# --- New functions ---
+# --- State validation ---
 
-_SCHEMAS = {
-    "engineer": ("tasks", {"pending", "in_progress", "done", "blocked"}),
-    # `baseline` and `kept` are here because real runs record them — see
-    # examples/qlib-quant/.state/history/journal-rounds-0-10.json.
-    "researcher": ("experiments", {"pending", "planned", "running", "accepted",
-                                   "rejected", "error", "baseline", "kept"}),
-    "auditor": ("findings", {"pending", "in_progress", "verified", "dismissed"}),
-}
+def _schema(conf: dict):
+    """The state schema a mode declares, or None if it declares none.
+
+    Modes name their work array and its legal statuses in mode.conf. Reading the
+    schema from the mode — rather than from a table keyed by mode name — is what
+    lets a mode you wrote yourself be validated too. A mode that declares
+    nothing is not validated, and that is visible in its mode.conf rather than
+    hidden in this file.
+    """
+    array_key = conf.get("state_array")
+    statuses = {s.strip() for s in conf.get("valid_statuses", "").split(",") if s.strip()}
+    return (array_key, statuses) if array_key and statuses else None
 
 
-def validate_state(data: dict, mode: str) -> tuple:
-    """Validate state data against mode schema. Returns (valid, errors).
+def validate_state(data: dict, conf: dict) -> tuple:
+    """Validate state against the mode's declared schema. Returns (valid, errors).
 
     Accepts the field names real runs produce, not just the canonical ones:
     `round` identifies an item as well as `id`, and `decision` carries status as
     well as `status` — including the `accepted(best)` form. `count_by_status`
-    already reads state that way, and a validator stricter than the reader
-    would reject journals the loop itself is happy to act on.
+    already reads state that way, and a validator stricter than the reader would
+    reject journals the loop itself is happy to act on.
     """
     errors = []
     if not isinstance(data, dict):
         return False, ["state must be a dict"]
-    schema = _SCHEMAS.get(mode)
+    schema = _schema(conf)
     if not schema:
         return True, []
     array_key, valid_statuses = schema
@@ -214,9 +218,9 @@ def safe_read_state(state_path: Path) -> tuple:
     return data, None
 
 
-def safe_write_state(state_path: Path, data: dict, mode: str) -> tuple:
+def safe_write_state(state_path: Path, data: dict, conf: dict) -> tuple:
     """Write state with validation and atomic rename. Returns (success, error)."""
-    valid, errors = validate_state(data, mode)
+    valid, errors = validate_state(data, conf)
     if not valid:
         return False, "; ".join(errors)
     state_path.parent.mkdir(parents=True, exist_ok=True)

@@ -294,7 +294,7 @@ def print_report(convergence_results, oos_results, autonomy_results):
     """Generate scientific experiment report."""
     print("=" * 70)
     print("  EXPERIMENTAL VALIDATION REPORT")
-    print("  auto-dev-agentos Loop Engineering — Is it genuinely effective?")
+    print("  evaloop Loop Engineering — Is it genuinely effective?")
     print("=" * 70)
 
     # --- Experiment 1: Convergence ---

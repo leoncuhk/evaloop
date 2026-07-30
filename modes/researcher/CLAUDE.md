@@ -1,4 +1,4 @@
-# auto-dev-agentos — Agent Workflow (Researcher Mode)
+# evaloop — Agent Workflow (Researcher Mode)
 
 > Auto-read by Claude Code. Defines rules for every agent session.
 

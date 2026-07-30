@@ -1,6 +1,13 @@
 # Why Three Roles: Peirce's Inquiry Cycle as Architectural Foundation
 
-This document explains why every mode in auto-dev-agentos has exactly three core roles — and why this is not a design choice but a logical necessity.
+> **Archived.** This essay was written for the three-mode architecture
+> (engineer / researcher / auditor) that shipped through v6. evaloop 7.0 ships a
+> single loop, scored by a metric. The argument below still holds — it is why the
+> loop is shaped the way it is — but its inventory of modes, file names and
+> commands describes a version that no longer exists. For what evaloop is now,
+> see the [README](../../README.md) and the [design rationale](../design-rationale.md).
+
+This document explains why every mode in evaloop has exactly three core roles — and why this is not a design choice but a logical necessity.
 
 ## Peirce's Theory of Inquiry
 
@@ -16,7 +23,7 @@ The key property: **all three are required.** Abduction without deduction produc
 
 ## The Three Roles Map to Peirce's Three Stages
 
-Each mode in auto-dev-agentos has three core roles. The mapping is natural, not forced:
+Each mode in evaloop has three core roles. The mapping is natural, not forced:
 
 | Peirce stage | Engineer | Researcher | Auditor |
 |-------------|----------|------------|---------|

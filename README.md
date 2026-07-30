@@ -1,79 +1,127 @@
-# auto-dev-agentos
+# evaloop
 
-[![CI](https://github.com/leoncuhk/auto-dev-agentos/actions/workflows/ci.yml/badge.svg)](https://github.com/leoncuhk/auto-dev-agentos/actions) [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](LICENSE) [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![CI](https://github.com/leoncuhk/evaloop/actions/workflows/ci.yml/badge.svg)](https://github.com/leoncuhk/evaloop/actions) [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](LICENSE) [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
-Verify your agent's output. Independently. Automatically.
+**Evaluation-driven autonomous development.** For loops whose acceptance
+criterion is a *metric*, not a test suite.
 
-A **verification harness** that wraps around any LLM agent loop. The agent proposes, the harness verifies — with independent commands, hidden out-of-sample data, and a scoring definition the agent cannot reach or rewrite. No frameworks, no Docker, under 1000 lines of Python and nothing outside the standard library.
+When an agent's work is judged by a number, the agent is also editing the thing
+that produces the number. Left alone, a long loop optimises the measurement
+rather than the work, and reports success. This harness keeps the measurement
+alive under that pressure: verification the orchestrator runs, a held-out metric
+the agent never sees, a scoring definition it cannot reach or rewrite, and a
+record of which numbers are trustworthy. Under 1000 lines of Python, nothing
+outside the standard library, no Docker.
 
-> **Core thesis**: Reliability in autonomous AI agent tasks comes from *structurally separate evaluation* — the evaluator must be architecturally independent from the generator. This is [Loop 2](https://blog.langchain.dev/the-art-of-loop-engineering/) in LangChain's stack, and the [non-negotiable principle](https://appscale.com) for production agent systems.
+> **The claim, stated narrowly**: a loop can only run unattended for as long as
+> its metric survives its own optimiser. Everything here exists to extend that.
 
-## What This Is
+## Is this for you?
 
-In the language of [Loop Engineering](https://addyosmani.com/blog/loop-engineering):
+| Your acceptance criterion | Use |
+|---|---|
+| A test suite the agent shouldn't edit | Claude Code, Cursor, [Spec Kit](https://github.com/github/spec-kit). This adds little |
+| A quality score you read yourself | An eval platform — [DeepEval](https://deepeval.com), [Inspect AI](https://inspect.aisi.org.uk), [Braintrust](https://braintrust.dev) |
+| A metric the agent optimises, on code the agent writes | **This** |
 
-| Layer | What | In this project |
-|-------|------|-----------------|
-| **Loop 1** (Agent) | LLM tool-calling loop | Claude Code, /goal, or any agent |
-| **Loop 2** (Verification) | Independent evaluation | **This project** — `verify_command` + `hidden_verify_command` |
-| **Loop 3** (Application) | Session orchestration | `run.py loop` — optional, wraps Loop 1 with Loop 2 |
-| **Loop 4** (Hill Climbing) | Cross-run optimization | Hidden metrics tracking in `.state/hidden_metrics.json` |
+The third row is where autonomous development actually breaks. Research agents
+on [MLE-bench](https://arxiv.org/html/2507.02554) show a persistent **9–13%
+validation/test generalization gap**: an agent optimising a proxy metric
+reliably converges somewhere the held-out set does not follow. It is not
+malice — it is what optimisers do. A number the agent never sees is the only
+measurement that survives it.
 
-Your agent (Loop 1) already works. This harness adds the verification layer (Loop 2) that production systems need: independent verification commands, hidden out-of-sample validation, and metric accumulation over time.
+This repository contains a worked case of the failure. An 11-round
+hyperparameter sweep improved its metric by 22.5%, every round scored on the
+same segment it selected from, and the held-out run that would have settled it
+was executed once and its result discarded. Full record in
+[`examples/qlib-quant/.state/history/`](examples/qlib-quant/.state/history/).
 
-## Three Ways to Use
+## What it does
 
-### 1. Standalone verification (no LLM calls)
+| Layer | What it means here |
+|---|---|
+| **Verification** | `verify_command` — run by the orchestrator, not reported by the agent |
+| **Held-out metric** | `hidden_verify_command` — written to `.state/hidden_metrics.json`, never fed back |
+| **Scoring integrity** | `--sealed-verify` puts the definition beyond the agent's reach; in-project scorers are fingerprinted around every session |
+| **Provenance** | Every recorded metric says whether it was sealed, tampered with, or leaked |
+| **Session loop** | Optional. Stateless sessions, file-based state, circuit breaker, budget cap |
 
-```bash
-# Run verification against your project — verify_command + hidden OOS
-python run.py verify examples/quant-lab --mode researcher
+In [Loop Engineering](https://addyosmani.com/blog/loop-engineering) terms this is
+Loop 2 with a thin Loop 3 attached; in [harness
+engineering](https://addyosmani.com/blog/agent-harness-engineering/) terms it is
+the enforcement layer, and it assumes you already have an execution layer —
+Claude Code, the Agent SDK, or your own.
 
-# Check project status
-python run.py status examples/todo-app
-```
+## Three ways to use it
 
-### 2. Session loop with verification
+### 1. As an evaluator for a search loop you already have
 
-```bash
-# Run the full loop: agent sessions + independent verification after each
-python run.py loop examples/todo-app --mode engineer
-
-# Same thing with backward-compatible syntax
-python run.py examples/todo-app
-```
-
-### 3. Library import
+The one that needs no buy-in. Evolutionary program search
+([AlphaEvolve](https://deepmind.google), [OpenEvolve](https://github.com/codelion/openevolve),
+[ShinkaEvolve](https://github.com/SakanaAI/ShinkaEvolve)) tells you to design an
+unhackable evaluator and leaves that to you. This is that evaluator:
 
 ```python
+from pathlib import Path
 from core import run_verification, load_conf
 
 conf = load_conf(Path("modes/researcher"))
-result = run_verification("/path/to/project", conf, session_label="manual")
-# result = {"verify": {"success": True, "metric": 1.89, ...}, "hidden": {"success": True, ...}}
+result = run_verification(
+    "/path/to/candidate",              # what the search just produced
+    conf,
+    sealed=Path("~/scoring/task.conf").expanduser(),   # outside the candidate
+    session_label="gen-42",
+)
+result["verify"]["metric"]        # what the search may optimise
+result["hidden"]["metric"]        # what it may not see
+result["integrity"]["trusted"]    # False if the candidate rewrote its scoring
 ```
+
+### 2. As a verification step around your own agent
+
+```bash
+python run.py verify ./my-project --sealed-verify ~/scoring/proj.conf
+```
+
+Exits non-zero on failure, so it drops into CI or a shell loop unchanged. No
+LLM calls, no cost.
+
+### 3. As the whole loop
+
+```bash
+python run.py loop ./my-project --sealed-verify ~/scoring/proj.conf
+```
+
+Stateless sessions against `hypothesis.md`, verification after each, hidden
+metric accumulated across the run, circuit breaker and budget cap.
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/leoncuhk/auto-dev-agentos
-cd auto-dev-agentos
+git clone https://github.com/leoncuhk/evaloop
+cd evaloop
 
-# See available modes
-python run.py list-modes
+# Score a project — no LLM calls, no cost. Prints the visible metric,
+# records the held-out one, exits non-zero on failure.
+python run.py verify examples/quant-lab
 
-# Check status of example project (zero cost)
-python run.py status examples/todo-app
+# Keep the scoring definition outside the project the agent writes to
+echo 'hidden_verify_command=python3 run_backtest.py --split test' > ~/task.conf
+python run.py verify examples/quant-lab --sealed-verify ~/task.conf
 
-# Run verification only (no LLM calls)
-python run.py verify examples/quant-lab --mode researcher
+# Watch the integrity layer catch a session that rewrites its own scorer.
+# Replayed from a script — no LLM calls, no cost.
+python run.py loop --simulate --pause 0 examples/tamper-demo
+# ...and to replay it:
+# rm -rf examples/tamper-demo/.state/journal.json examples/tamper-demo/logs
 
-# Test session loop with simulation (no LLM calls, no cost)
-python run.py loop --simulate --mode engineer --pause 0 examples/todo-app
-
-# Run for real
-mkdir my-project && echo "# My App\nBuild a REST API..." > my-project/spec.md
-python run.py loop my-project
+# Run a real loop against your own hypothesis. Copy a working baseline first —
+# researcher mode scores by running the project's own evaluation script.
+mkdir my-lab
+cp examples/quant-lab/{hypothesis.md,run_backtest.py,strategies.py} my-lab/
+python run.py verify my-lab          # confirm it scores before spending anything
+python run.py loop my-lab --sealed-verify ~/task.conf
 ```
 
 ## The Verification Layer
@@ -141,35 +189,48 @@ This is the architecture [sandbox-policy research](https://github.com/islo-labs/
 
 ## Architecture
 
-![auto-dev-agentos architecture](assets/auto-dev-agentos-architecture.png)
+![evaloop architecture: the orchestrator runs the project and reads its metric; the sealed config and held-out data reach the orchestrator only, and the path from held-out data into the project is blocked](assets/evaloop-architecture.png)
 
-Each session is stateless. State lives in `.state/` files. Session N+1 reads what Session N wrote. The engine decides what runs — the LLM only executes.
+The agent works inside the project directory and can write anything in it — its
+own code, its own state, its own scorer. The orchestrator sits outside. It reads
+how to score from a file the agent cannot reach, runs the scoring itself, and
+keeps the held-out number on its own side of that boundary.
 
-|              | **Engineer**         | **Researcher**        | **Auditor**              |
-|--------------|----------------------|-----------------------|--------------------------|
-| Input        | `spec.md`            | `hypothesis.md`       | `standards.md`           |
-| Each session | One task             | One experiment        | One finding              |
-| On failure   | Fix and retry        | Revert and learn      | Dismiss with evidence    |
-| Exit when    | All tasks pass       | Target metric hit     | All standards covered    |
-| State file   | `tasks.json`         | `journal.json`        | `findings.json`          |
-| Verification | `npm test` / `pytest`| Backtest metric       | Coverage count           |
+Each session starts with a fresh context and ends when its one experiment is
+done. What carries across sessions is files, not context: the journal, the
+progress log, the learnings. Session 30 reads what session 1 wrote.
+
+| Phase | Prompt | What the session does |
+|---|---|---|
+| **init** | `theorizer` | Read `hypothesis.md` and the journal, design one experiment |
+| **work** | `executor` | Run that experiment, keep it or revert it on the metric |
+| **review** | `analyst` | Every N sessions, look across experiments for patterns |
+| **orient** | `strategist` | Every M sessions, decide continue / pivot / done |
+
+Input is `hypothesis.md`. State is `.state/journal.json`, `.state/progress.md`,
+`.state/learnings.md`. The loop exits when the target metric is reached, the
+circuit breaker trips, or the budget is spent.
+
+A mode is just a directory under `modes/`. evaloop ships one; copy it and change
+`mode.conf` to point the loop at a different kind of work. The engine reads what
+a mode declares — its entry file, state file, work array and status
+vocabulary — and knows nothing about the shipped names. See
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Project Structure
 
 ```
-auto-dev-agentos/
-├── run.py              # Verification harness CLI (573 lines)
-├── core.py             # Pure functions: verification, integrity, state (429 lines)
+evaloop/
+├── run.py              # Verification harness CLI (577 lines)
+├── core.py             # Pure functions: verification, integrity, state (433 lines)
 ├── modes/
-│   ├── engineer/       # spec.md → tasks → implement → verify
-│   ├── researcher/     # hypothesis.md → experiment → evaluate → learn
-│   └── auditor/        # standards.md → scan → analyze → report
+│   └── researcher/     # the shipped loop: hypothesis → experiment → evaluate → learn
 ├── tests/
 │   ├── test_run.py     # Unit tests (17 tests)
-│   └── test_integration.py  # Integration tests (60 tests)
+│   └── test_integration.py  # Integration tests (64 tests)
 ├── experiments/        # run_validation.py — orchestrator conformance checks
 ├── docs/               # Design rationale and methodology
-└── examples/           # Demo projects (todo-app, quant-lab, qlib-quant, goal-vs-loop)
+└── examples/           # quant-lab, qlib-quant, goal-vs-loop, tamper-demo
     └── <project>/
         ├── .state/learnings.md   # Cross-session knowledge (tracked)
         ├── .state/history/       # Archived records of completed runs
@@ -229,12 +290,13 @@ many live runs, measured against a control — has not been done.
 ## CLI Reference
 
 ```
-python run.py verify <project> [--mode MODE] [--sealed-verify FILE]   # verify only
-python run.py loop <project> [--mode MODE] [options]   # session loop
-python run.py status <project> [--mode MODE]           # show phase/progress
-python run.py list-modes                               # list available modes
-python run.py <project> [options]                      # backward compat → loop
-python run.py --dry-run <project>                      # backward compat → status
+python run.py verify  <project> [--sealed-verify FILE]   # score only, no LLM
+python run.py loop    <project> [--sealed-verify FILE] [options]
+python run.py status  <project>                          # phase and progress
+python run.py list-modes                                 # modes found in modes/
+python run.py <project> [options]                        # backward compat → loop
+
+--mode NAME   Any directory under modes/. Defaults to the shipped `researcher`.
 ```
 
 | Loop option | Default | Description |
@@ -313,15 +375,21 @@ Yes. The verification layer is LLM-agnostic. Replace the `claude -p` call in `ru
 Yes. Same command again. The engine re-reads `.state/` and continues from where it left off.
 
 **What's the `.verify` file?**
-Project-level override for verification commands. Takes precedence over `mode.conf`. Useful when the same mode applies to different projects with different test suites.
+A per-project override for the scoring commands, taking precedence over `mode.conf`. It lives inside the project, so the agent can edit it — which is why a session that changes it is reported as `TAMPERED`, and why `--sealed-verify` exists for the cases where that is not good enough.
+
+**Why is there a mode system if only one mode ships?**
+Because a mode is the only thing that describes your loop: which file states the goal, which file holds the work, and what statuses that work can be in. The engine reads those declarations and knows nothing about the name `researcher`. Copy `modes/researcher/` to point the loop at different work.
+
+**What happened to engineer and auditor modes?**
+Cut in 7.0. Everything that makes this project worth using — held-out metrics, sealed scoring, integrity checks — only applied to the metric-scored loop. See [the design rationale](docs/design-rationale.md).
 
 ## References
 
 **Design:**
 - [Design Rationale](docs/design-rationale.md) — Why this architecture, what alternatives were considered
-- [Peirce's Inquiry Cycle](docs/peirce-inquiry-cycle.md) — Why three roles per mode is logically irreducible
-- [Stateless Agent Architecture](docs/stateless-agent-architecture.md) — Full argument for stateless sessions
-- [Dual-Loop Architecture](docs/dual-loop-architecture.md) — Strategic orientation via OODA outer loop
+- [Archived essays](docs/archive/) — the stateless-session argument, the OODA outer loop and
+  the Peirce three-role case, written for the three-mode architecture that shipped
+  through v6. The arguments hold; the mode inventory does not
 
 **Loop Engineering:**
 - [Addy Osmani — Loop Engineering](https://addyosmani.com/blog/loop-engineering) — Canonical definition (June 2026)

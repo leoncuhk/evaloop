@@ -1,6 +1,13 @@
 # The Dual-Loop Agent: Why Your Autonomous Pipeline Needs Both OODA and SDK Loops
 
-*An architectural evolution for [auto-dev-agentos](https://github.com/leoncuhk/auto-dev-agentos), integrating strategic orientation into autonomous AI agent systems.*
+> **Archived.** This essay was written for the three-mode architecture
+> (engineer / researcher / auditor) that shipped through v6. evaloop 7.0 ships a
+> single loop, scored by a metric. The argument below still holds — it is why the
+> loop is shaped the way it is — but its inventory of modes, file names and
+> commands describes a version that no longer exists. For what evaloop is now,
+> see the [README](../../README.md) and the [design rationale](../design-rationale.md).
+
+*An architectural evolution for [evaloop](https://github.com/leoncuhk/evaloop), integrating strategic orientation into autonomous AI agent systems.*
 
 ---
 
@@ -48,14 +55,14 @@ Outer OODA Loop (every N sessions):
     Iterate         — Retry if failed, return to outer loop if verified
 ```
 
-![The v4.0 architecture: the outer OODA loop and inner SDK loop side by side, the three operating modes with their role sequences, the file-based state each mode carries, and the failure mode each principle addresses](../assets/dual-loop.png)
+![The v4.0 architecture: the outer OODA loop and inner SDK loop side by side, the three operating modes with their role sequences, the file-based state each mode carries, and the failure mode each principle addresses](../../assets/dual-loop.png)
 
 *Figure: the architecture as of v4.0, when the outer loop was introduced. The
 state-file lists predate `.state/learnings.md`; the loop structure is unchanged.*
 
 ## Why Orient Can't Be Implicit
 
-In auto-dev-agentos v3.0, the Reviewer (engineer mode) and Analyst (researcher mode) partially fill the Orient role. They check health metrics and detect stuck patterns. But they have a structural limitation: **they run at the same level as the work sessions**.
+In evaloop v3.0, the Reviewer (engineer mode) and Analyst (researcher mode) partially fill the Orient role. They check health metrics and detect stuck patterns. But they have a structural limitation: **they run at the same level as the work sessions**.
 
 The Reviewer can say "Task T7 has been in_progress for 3 sessions." But it can't say "The entire frontend approach is wrong because we skipped the CSS setup, and tasks T7-T12 will all fail for the same reason. We need to add a prerequisite task."
 
@@ -65,7 +72,7 @@ Both of these are **Orient-level** insights — they require synthesizing across
 
 ## The Strategist Agent
 
-auto-dev-agentos v4.0 introduces a **Strategist** prompt for each mode — the explicit Orient phase of the outer OODA loop. It runs every `orient_interval` sessions (default: 10) and produces one of three decisions:
+evaloop v4.0 introduces a **Strategist** prompt for each mode — the explicit Orient phase of the outer OODA loop. It runs every `orient_interval` sessions (default: 10) and produces one of three decisions:
 
 **CONTINUE** — The current direction is productive. Keep executing.
 

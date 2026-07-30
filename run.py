@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-auto-dev-agentos v6.2 — Verification Harness for LLM Agent Loops
+evaloop v7.0 — Evaluation-Driven Autonomous Development
 
-Structurally separate evaluator (Loop 2) that wraps around any agent loop.
-Independent verification, hidden out-of-sample validation, budget/stuck controls.
+For loops whose acceptance criterion is a metric rather than a test suite.
+The orchestrator scores the work, keeps a held-out metric the agent never sees,
+and records which of those numbers can be trusted.
 
 Usage:
-  python run.py verify <project-dir> [--mode MODE]      # verify only, no LLM
-  python run.py loop <project-dir> [--mode MODE]         # session loop + verify
-  python run.py status <project-dir>                     # show phase/progress
+  python run.py verify <project-dir> [--sealed-verify FILE]   # score only, no LLM
+  python run.py loop <project-dir> [--sealed-verify FILE]     # session loop + scoring
+  python run.py status <project-dir>                          # show phase/progress
 
 Scoring integrity: --sealed-verify FILE keeps the scoring definition outside the
 project, so an agent that rewrites .verify changes nothing. In-project scoring
@@ -24,8 +25,9 @@ from datetime import datetime
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
-VERSION = "6.2"
+VERSION = "7.0"
 COMPLETE_SIGNAL = "<promise>COMPLETE</promise>"
+DEFAULT_MODE = "researcher"
 
 from core import (
     load_conf, get_phase, progress_count, run_verification,
@@ -323,7 +325,7 @@ async def engine(args):
             sys.exit(f"[SIMULATE] No sim_script.json in {project / '.state'}")
         sim_script = json.loads(sim_path.read_text())
 
-    mode_label = f"{'[SIMULATE] ' if simulate else ''}auto-dev-agentos v{VERSION}"
+    mode_label = f"{'[SIMULATE] ' if simulate else ''}evaloop v{VERSION}"
     print(f"\n  {mode_label} | {args.mode} | max {args.max_sessions} sessions | ${args.max_budget:.0f} budget")
     print(f"  Project: {project}\n")
 
@@ -399,7 +401,7 @@ async def engine(args):
         if read_err and state_path.exists():
             print(f"{lp}[{ts()}] WARNING: unreadable state — {read_err}")
         elif data is not None:
-            state_ok, state_errs = validate_state(data, args.mode)
+            state_ok, state_errs = validate_state(data, conf)
             if not state_ok:
                 print(f"{lp}[{ts()}] WARNING: invalid state after session "
                       f"#{session}: {'; '.join(state_errs[:3])}")
@@ -464,7 +466,9 @@ def cmd_verify(args):
         sys.exit(f"Sealed verification file not found: {sealed}")
     if sealed and _is_inside(sealed, project):
         sys.exit(f"Sealed verification file must live outside the project: {sealed}")
-    print(f"  auto-dev-agentos v{VERSION} verify | {args.mode}\n  Project: {project}\n")
+    print(f"  evaloop v{VERSION} verify | {args.mode}\n  Project: {project}")
+    print(f"  Sealed scoring config: {sealed}\n" if sealed
+          else "  Scoring config: mode.conf / project .verify (agent-writable)\n")
     result = run_verification(str(project), conf, session_label="manual",
                               sealed=sealed)
     if not result["verify"] and not result["hidden"]:
@@ -488,7 +492,7 @@ def cmd_status(args):
     done = progress_count(state_path, conf)
     prompt_name = conf.get(PHASE_KEYS.get(phase, ""), phase)
     prompt_file = mode_dir / "prompts" / f"{prompt_name}.md"
-    print(f"  auto-dev-agentos v{VERSION} status | {args.mode}")
+    print(f"  evaloop v{VERSION} status | {args.mode}")
     print(f"  Project: {project}\n")
     print(f"  Phase:  {phase} | Progress: {done} done")
     print(f"  Entry:  {entry} {'(OK)' if (project / entry).exists() else '(MISSING)'}")
@@ -513,10 +517,10 @@ def main():
     import argparse
 
     def _mode(p):
-        p.add_argument("--mode", default="engineer")
+        p.add_argument("--mode", default=DEFAULT_MODE)
 
     top = argparse.ArgumentParser(
-        description=f"auto-dev-agentos v{VERSION} — Verification Harness")
+        description=f"evaloop v{VERSION} — Verification Harness")
     sub = top.add_subparsers(dest="command")
 
     def _sealed(p):

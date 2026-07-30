@@ -1,0 +1,6 @@
+# Runtime output of the demo. Unlike the other examples, nothing here is
+# evidence — the sessions are replayed from sim_script.json, not run against a
+# live model — so it is regenerated rather than tracked.
+.state/journal.json
+logs/
+.state/hidden_metrics.json

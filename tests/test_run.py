@@ -32,7 +32,7 @@ def test_count_researcher():
     q = '[.experiments[] | select(.status == "pending" or .status == "planned" or .status == "running")] | length'
     assert count_by_status(data, q) == 2
 
-def test_count_auditor():
+def test_count_third_shape():
     data = {"findings": [{"status": "verified"}, {"status": "dismissed"}, {"status": "pending"}]}
     assert count_by_status(data, '[.findings[] | select(.status == "verified" or .status == "dismissed")] | length') == 2
 

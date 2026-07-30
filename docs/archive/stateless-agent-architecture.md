@@ -1,6 +1,13 @@
 # Why Your AI Coding Agent Fails at Long Tasks — and the Architecture That Fixes It
 
-*A practical guide to building reliable autonomous AI development pipelines, based on the design principles behind [auto-dev-agentos](https://github.com/leoncuhk/auto-dev-agentos).*
+> **Archived.** This essay was written for the three-mode architecture
+> (engineer / researcher / auditor) that shipped through v6. evaloop 7.0 ships a
+> single loop, scored by a metric. The argument below still holds — it is why the
+> loop is shaped the way it is — but its inventory of modes, file names and
+> commands describes a version that no longer exists. For what evaloop is now,
+> see the [README](../../README.md) and the [design rationale](../design-rationale.md).
+
+*A practical guide to building reliable autonomous AI development pipelines, based on the design principles behind [evaloop](https://github.com/leoncuhk/evaloop).*
 
 ---
 
@@ -67,7 +74,7 @@ The same principles apply to AI agent systems. I call this the **Stateless Agent
 
 Most agent frameworks let the LLM decide what to do next. This is fundamentally unreliable. An LLM deciding its own workflow is like letting a contractor decide which building code to follow — sometimes they'll get it right, but you can't *depend* on it.
 
-In auto-dev-agentos, a Python script (`run.py`) controls the entire execution flow: which phase runs, when to review, when to stop, when to abort. The LLM only sees "here's your task, do it, report the result." The LLM has zero influence on the orchestration logic.
+In evaloop, a Python script (`run.py`) controls the entire execution flow: which phase runs, when to review, when to stop, when to abort. The LLM only sees "here's your task, do it, report the result." The LLM has zero influence on the orchestration logic.
 
 This addresses **all six failure modes** at the architectural level — the agent literally cannot drift, loop, or skip steps because the orchestrator won't let it.
 
@@ -188,9 +195,9 @@ Human writes hypothesis.md (goals + search space + target metric)
 
 This is the genuinely novel application. As of March 2026, I haven't found another open-source tool that automates the **inductive research loop** — hypothesis, experiment, evaluate, learn, iterate.
 
-Sakana's [AI Scientist v2](https://github.com/SakanaAI/AI-Scientist-v2) comes closest, but it's a monolithic system that generates entire papers. auto-dev-agentos takes a different approach: **the human defines the hypothesis and search space, the agent executes iterations**. Given the documented failure modes (especially "weak scientific taste"), this human-in-the-loop approach is more reliable at the current state of the art.
+Sakana's [AI Scientist v2](https://github.com/SakanaAI/AI-Scientist-v2) comes closest, but it's a monolithic system that generates entire papers. evaloop takes a different approach: **the human defines the hypothesis and search space, the agent executes iterations**. Given the documented failure modes (especially "weak scientific taste"), this human-in-the-loop approach is more reliable at the current state of the art.
 
-A [complete demo](../examples/quant-lab/) shows this in action: optimizing a trading strategy's Sharpe Ratio from 0.85 toward 1.5, with 6 experiments (2 accepted, 3 rejected, 1 error), accumulated learnings, and an analyst review. The experiment journal reads like a real research log — because the structure forces it to be.
+A [complete demo](../../examples/quant-lab/) shows this in action: optimizing a trading strategy's Sharpe Ratio from 0.85 toward 1.5, with 6 experiments (2 accepted, 3 rejected, 1 error), accumulated learnings, and an analyst review. The experiment journal reads like a real research log — because the structure forces it to be.
 
 ## How This Relates to the 2026 Landscape
 
@@ -200,15 +207,15 @@ The agentic coding space in early 2026 is consolidating around three layers:
 
 **Orchestration layer** (Claude Code Agent Teams, Gas Town, Multiclaude) — rapidly being absorbed by platform providers. Anthropic's Agent Teams feature already supports multi-session coordination, task assignment, and inter-agent messaging. Competing here as an independent project is a losing proposition.
 
-**Methodology layer** (GitHub Spec Kit, auto-dev-agentos, Simon Willison's Agentic Engineering Patterns) — this is where durable value lives. When the execution and orchestration layers are commoditized, **how you use them reliably** becomes the differentiator. This is what auto-dev-agentos provides.
+**Methodology layer** (GitHub Spec Kit, evaloop, Simon Willison's Agentic Engineering Patterns) — this is where durable value lives. When the execution and orchestration layers are commoditized, **how you use them reliably** becomes the differentiator. This is what evaloop provides.
 
-GitHub's [Spec Kit](https://github.com/github/spec-kit) validates the spec-driven approach but stops at task generation — it doesn't execute or verify. auto-dev-agentos closes that gap: from spec to verified, committed code, with every step auditable.
+GitHub's [Spec Kit](https://github.com/github/spec-kit) validates the spec-driven approach but stops at task generation — it doesn't execute or verify. evaloop closes that gap: from spec to verified, committed code, with every step auditable.
 
 ## Getting Started
 
 ```bash
-git clone https://github.com/leoncuhk/auto-dev-agentos
-cd auto-dev-agentos
+git clone https://github.com/leoncuhk/evaloop
+cd evaloop
 
 # Try engineer mode: write a spec.md, then run
 python run.py my-project
@@ -254,7 +261,7 @@ The fix isn't a better model. It's a better architecture:
 
 These aren't novel ideas. They're the same principles that made Unix reliable, that made REST scalable, that made 12-Factor Apps deployable. Applied to AI agents, they produce something that actually works for tasks longer than a single chat turn.
 
-The code is open source: [github.com/leoncuhk/auto-dev-agentos](https://github.com/leoncuhk/auto-dev-agentos).
+The code is open source: [github.com/leoncuhk/evaloop](https://github.com/leoncuhk/evaloop).
 
 ---
 

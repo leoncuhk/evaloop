@@ -1,22 +1,22 @@
-# Contributing to auto-dev-agentos
+# Contributing to evaloop
 
 ## Quick Setup
 
 ```bash
-git clone https://github.com/leoncuhk/auto-dev-agentos
-cd auto-dev-agentos
+git clone https://github.com/leoncuhk/evaloop
+cd evaloop
 
 # Verify harness
 python3 run.py list-modes
 python3 run.py status examples/todo-app
-python3 run.py verify examples/quant-lab --mode researcher
+python3 run.py verify examples/quant-lab
 
 # Run all tests (54 total)
 python3 tests/test_run.py           # 17 unit tests
 python3 tests/test_integration.py   # 37 integration tests
 
 # Test session loop with simulation (no LLM calls)
-python3 run.py loop --simulate --mode researcher --pause 0 examples/quant-lab
+python3 run.py loop --simulate --pause 0 examples/tamper-demo
 ```
 
 ## Project Structure
@@ -29,6 +29,9 @@ python3 run.py loop --simulate --mode researcher --pause 0 examples/quant-lab
 - `examples/` — Demo projects (todo-app, quant-lab, qlib-quant)
 
 ## Adding a New Mode
+
+evaloop ships one mode. A mode is just a directory, so defining your own is
+how you point the loop at a different kind of work.
 
 1. Create `modes/<name>/mode.conf`:
    ```ini

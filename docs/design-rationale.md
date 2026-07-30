@@ -1,6 +1,6 @@
 # Design Rationale
 
-Why auto-dev-agentos is designed the way it is — and what alternatives were considered.
+Why evaloop is designed the way it is — and what alternatives were considered.
 
 > **A note on what changed.** Most of this document argues against *orchestration*
 > frameworks, because until v6.0 this project competed with them. v6.0 narrowed the
@@ -39,7 +39,7 @@ Full platforms with Docker sandboxes, web GUIs, cloud execution. OpenHands has 6
 
 ## Our Choice: Deterministic Multi-Session Orchestration
 
-auto-dev-agentos takes a fourth approach:
+evaloop takes a fourth approach:
 
 1. **The orchestrator script decides what runs.** The LLM only executes single, well-scoped tasks.
 2. **Each session is stateless.** Fresh context every time. No degradation.
@@ -59,24 +59,34 @@ This trades LLM autonomy for system reliability. The model is powerful but unrel
 
 Each of these is a deliberate constraint that eliminates a class of failure modes.
 
-## The Three Modes
+## One Loop
 
-The same loop architecture supports three reasoning patterns:
+Through v6 this project shipped three modes — engineer (deductive, spec to code),
+researcher (inductive, hypothesis to metric) and auditor (abductive, standards to
+findings). 7.0 ships only the second.
 
-**Engineer** — Deductive. From a spec, derive a working implementation. Exit when all tasks pass verification. This is the common case: spec-driven development.
+The reason is that the machinery which distinguishes this project — a held-out
+metric, a sealed scoring definition, fingerprints around every session — only
+ever applied to the second. Engineer mode's criterion is a test suite the agent
+should not be editing anyway; where that is the criterion, a coding agent with a
+test-run hook is the better tool, and pretending otherwise cost this project its
+focus. Auditor mode's criterion is coverage, which nobody games.
 
-**Researcher** — Inductive. From a hypothesis, run experiments, measure results, accumulate learnings. Failed experiments are reverted (code) but preserved (learnings). Exit when the target metric is achieved or the search space is exhausted.
+Keeping all three made the project look general and be shallow. The loop itself
+is unchanged: hypothesis → experiment → evaluate → learn, one experiment per
+session, revert on regression, accumulate learnings.
 
-**Auditor** — Abductive. From observed code patterns, hypothesize violations. Verify each with evidence. Never modify the code being audited. Exit when all standards are covered.
-
-These three map to Peirce's inquiry cycle — each mode emphasizes one reasoning type but internally uses all three through its Init (abduction), Work (deduction), and Review (induction) phases.
+A mode is still just a directory. The engine reads what a mode declares — entry
+file, state file, work array, status vocabulary — and knows nothing about the
+name `researcher`. Defining a loop for a different kind of work is a `mode.conf`
+away, and the test suite drives an unfamiliar mode end to end to keep that true.
 
 ## Positioning
 
 ```
 Complexity ────────────────────────────────────────────►
 
-  Claude Code     auto-dev-agentos     Gas Town        BMAD / MetaGPT
+  Claude Code     evaloop     Gas Town        BMAD / MetaGPT
   (single session) (multi-session loop) (20-30 agents)  (26+ agents)
   
   Simple but       Simple and           Parallel but     Complex and
@@ -84,7 +94,7 @@ Complexity ───────────────────────
   long tasks       long tasks
 ```
 
-auto-dev-agentos occupies the space between "powerful but unreliable single session" and "complex multi-agent orchestration." Minimum viable reliability for long-running autonomous tasks.
+evaloop occupies the space between "powerful but unreliable single session" and "complex multi-agent orchestration." Minimum viable reliability for long-running autonomous tasks.
 
 ## The Loop-2 Comparison
 

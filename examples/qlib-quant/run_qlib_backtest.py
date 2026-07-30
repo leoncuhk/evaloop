@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Qlib Backtest Runner — auto-dev-agentos loop integration.
+Qlib Backtest Runner — evaloop loop integration.
 
 Trains LightGBM on CSI300 Alpha158 features, evaluates predictions
 via IC and a simple top-k signal-return correlation.

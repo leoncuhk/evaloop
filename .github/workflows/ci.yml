@@ -54,28 +54,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 run.py list-modes
-      - run: python3 run.py status examples/todo-app
+      - run: python3 run.py status examples/quant-lab
       # End-to-end through the engine, including the integrity checks, at no cost.
       - name: Simulated loop
         run: |
           mkdir -p /tmp/sim/.state
-          echo "spec" > /tmp/sim/spec.md
+          echo "hypothesis" > /tmp/sim/hypothesis.md
           cat > /tmp/sim/.state/sim_script.json <<'EOF'
-          [{"state_changes": {"tasks": [{"id": "T1", "status": "pending"}]}, "cost": 0.01},
-           {"state_changes": {"tasks": [{"id": "T1", "status": "done"}]}, "cost": 0.01}]
+          [{"state_changes": {"experiments": [{"id": "E1", "status": "pending"}],
+                              "best_metric": 0.5, "target_metric": 1.5}, "cost": 0.01},
+           {"state_changes": {"experiments": [{"id": "E1", "status": "accepted"}],
+                              "best_metric": 1.9, "target_metric": 1.5}, "cost": 0.01}]
           EOF
-          python3 run.py loop --simulate --mode engineer --pause 0 --max-sessions 5 /tmp/sim
+          python3 run.py loop --simulate --pause 0 --max-sessions 5 /tmp/sim
       - name: Tamper detection fires end to end
+        # The shipped demo, exactly as the README tells users to run it.
         run: |
-          mkdir -p /tmp/tamper/.state
-          echo "spec" > /tmp/tamper/spec.md
-          echo 'print("[Metric] Score: 0.5")' > /tmp/tamper/score.py
-          echo 'verify_command=python3 score.py' > /tmp/tamper/.verify
-          cat > /tmp/tamper/.state/sim_script.json <<'EOF'
-          [{"state_changes": {"tasks": [{"id": "T1", "status": "pending"}]}, "cost": 0.01},
-           {"state_changes": {"tasks": [{"id": "T1", "status": "done"}]}, "cost": 0.01,
-            "file_writes": {"score.py": "print(\"[Metric] Score: 99.0\")\n"}}]
-          EOF
-          python3 run.py loop --simulate --mode engineer --pause 0 --max-sessions 5 /tmp/tamper \
+          python3 run.py loop --simulate --pause 0 examples/tamper-demo \
             | tee /tmp/tamper.out
           grep -q "TAMPERED" /tmp/tamper.out
+          grep -q "Those metrics are not results" /tmp/tamper.out

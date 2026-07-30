@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a bug in auto-dev-agentos
+about: Report a bug in evaloop
 labels: bug
 ---
 

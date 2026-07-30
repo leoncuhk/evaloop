@@ -1,12 +1,13 @@
-# auto-dev-agentos — Project Instructions
+# evaloop — Project Instructions
 
 > Auto-read by Claude Code when working on this repository.
 
 ## What This Project Is
 
-A verification harness (Loop 2) for LLM agent loops. Two engines:
-- `run.py` (~573 lines of Python) — subcommand CLI: verify, loop, status, list-modes
-- `core.py` (~429 lines) — pure functions: verification, scoring integrity, state, metrics
+Evaluation-driven autonomous development: a harness for loops whose acceptance
+criterion is a metric rather than a test suite. Two engines:
+- `run.py` (~577 lines of Python) — subcommand CLI: verify, loop, status, list-modes
+- `core.py` (~433 lines) — pure functions: verification, scoring integrity, state, metrics
 
 ## Architecture
 
@@ -23,9 +24,11 @@ A verification harness (Loop 2) for LLM agent loops. Two engines:
 
 - Run tests: `python3 tests/test_run.py && python3 tests/test_integration.py`
 - Syntax check: `python3 -c "import ast; ast.parse(open('run.py').read())"` 
-- Smoke test: `python3 run.py status examples/todo-app`
-- Verify test: `python3 run.py verify examples/quant-lab --mode researcher`
-- Simulation test: `python3 run.py loop --simulate --mode engineer --pause 0 /tmp/test-project`
+- Smoke test: `python3 run.py status examples/quant-lab`
+- Integrity demo: `python3 run.py loop --simulate --pause 0 examples/tamper-demo`
+  (reset with `rm -rf examples/tamper-demo/.state/journal.json examples/tamper-demo/logs`)
+- Verify test: `python3 run.py verify examples/quant-lab`
+- Simulation test: `python3 run.py loop --simulate --pause 0 examples/tamper-demo`
 - run.py must stay under 620 lines, core.py under 460 lines
 - Pure functions go in core.py, not in run.py
 

@@ -1,5 +1,92 @@
 # Changelog
 
+## [7.0.0] — 2026-07-30
+
+Renamed to **evaloop**, and cut to one thing.
+
+The project shipped three modes and defended one of them. Held-out metrics,
+sealed scoring and integrity checks only ever applied to the hypothesis loop;
+engineer mode's criterion was a test suite the agent should not be editing
+anyway, and auditor mode's was coverage, which nobody games. Carrying all three
+made the project look general and be shallow. What remains is
+**evaluation-driven autonomous development**: a loop whose acceptance criterion
+is a metric, and the machinery that keeps that metric meaningful while an agent
+optimises against it.
+
+### Removed
+- **Engineer and auditor modes**, with `examples/todo-app` and
+  `examples/audit-demo`. `--mode` now defaults to `researcher`
+- `assets/auto-dev-agentos-architecture.png`, replaced by a diagram of what the
+  project actually does
+
+### Changed
+- **Renamed `auto-dev-agentos` → `evaloop`** throughout. The old name promised
+  spec-to-code, which is the case this project is now explicit about *not*
+  serving
+- **A mode declares its own state schema.** `validate_state(data, conf)` reads
+  `state_array` and `valid_statuses` from `mode.conf` instead of looking the mode
+  up in a table keyed by name. A mode you write yourself is validated too;
+  previously it silently passed. `safe_write_state` takes a conf for the same
+  reason. **Breaking**: both signatures changed
+- README rebuilt around the single loop: a phase table replaces the mode
+  comparison, and the architecture section explains the one boundary that matters
+- The three methodology essays moved to `docs/archive/` with a header saying what
+  they describe. Their arguments still hold; their inventory of modes does not
+- `docs/design-rationale.md` explains why the other two modes were cut
+- `examples/tamper-demo` rebuilt on the shipped loop
+
+### Added
+- **`assets/evaloop-architecture.png`**: the orchestrator outside the project,
+  the sealed config and held-out data reaching only the orchestrator, and the
+  path from held-out data into the project drawn as blocked
+- `test_user_defined_mode_drives_the_loop` — an unfamiliar mode, with a different
+  entry file, state file, array and status vocabulary, driven end to end with no
+  code change. The mode directory is an extension point, and this keeps it one
+- 81 tests
+
+## [6.3.0] — 2026-07-30
+
+Names what this actually is. The project was described as a general autonomous
+development engine, then as a verification harness, while the machinery that
+distinguishes it — held-out metrics, sealed scoring, integrity checks — served
+exactly one of its three modes. The positioning now matches the code:
+**evaluation-driven autonomous development**, for loops whose acceptance
+criterion is a metric rather than a test suite.
+
+The argument, briefly: a loop runs unattended only for as long as its metric
+survives its own optimiser. Where the criterion is a test suite the agent should
+not edit, a coding agent with a test hook is the better tool, and the README now
+says so rather than competing for that use.
+
+### Fixed
+- **Engineer mode verified successfully on projects with no tests.** The command
+  ended in `|| echo "[Metric] Tests: 0"`, which exits 0 — so absent evidence read
+  as passing evidence, in the mode whose whole criterion is that tests pass. It
+  now selects a runner from what the project contains and lets its exit code
+  stand: green suite passes, red suite fails, no suite fails
+- The README's `--simulate` quick-start command pointed at `examples/todo-app`,
+  which ships no `sim_script.json`, so it had never worked
+
+### Added
+- **`examples/tamper-demo`**: the integrity layer shown in two replayed sessions,
+  no LLM calls and no cost. Session two marks its task done and rewrites
+  `score.py` to report 99.0; the harness reports that metric as `TAMPERED`
+  rather than as a result. Self-resetting apart from task state, so it replays
+  without git. CI runs this exact demo instead of a private copy of it
+- 3 regression tests for engineer verification (80 total)
+
+### Changed
+- README rewritten around the metric case: who this is *not* for, first; the
+  qlib sweep in this repository as the worked example of the failure it prevents;
+  researcher mode leading the mode table, with engineer and auditor scoped
+  honestly beneath it
+- `run_verification` documented as an evaluator for external search loops
+  (AlphaEvolve, OpenEvolve, ShinkaEvolve), which state an unhackable evaluator as
+  a prerequisite and leave building it to the user
+- `verify` prints whether scoring came from a sealed file or an agent-writable
+  one, which `loop` already did
+- Every command in the README Quick Start executed before commit
+
 ## [6.2.0] — 2026-07-30
 
 Makes the harness's one distinctive claim enforceable. Everything under the
