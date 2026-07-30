@@ -279,6 +279,76 @@ def test_parse_metric_missing():
     assert parse_metric("No metric here\nJust text") is None
 
 
+def test_parse_metric_negative():
+    """A losing run reports a negative metric. Reading it as positive, or
+    skipping to the next [Metric] line, would hide a regression from the loop."""
+    output = ("[Metric] Sharpe Ratio: -0.8363\n"
+              "[Metric] Annualized Return: 0.5550\n"
+              "[Metric] IC Mean: 0.0285")
+    assert parse_metric(output) == -0.8363
+
+
+def test_parse_metric_scientific_notation():
+    assert parse_metric("[Metric] IC: 1e-3") == 0.001
+    assert parse_metric("[Metric] IC: -2.5E+2") == -250.0
+
+
+def test_parse_metric_leading_decimal_point():
+    assert parse_metric("[Metric] Rate: .75") == 0.75
+
+
+def test_parse_metric_pattern_selects_line():
+    """metric_pattern picks one label out of several."""
+    output = ("[Metric] Sharpe Ratio: 1.8900\n"
+              "[Metric] IC Mean: 0.0285")
+    assert parse_metric(output, "[Metric] IC Mean:") == 0.0285
+    assert parse_metric(output, "[Metric] Sharpe Ratio:") == 1.89
+    assert parse_metric(output, "[Metric] Absent:") is None
+
+
+def test_verify_command_honours_metric_pattern():
+    with tempfile.TemporaryDirectory() as tmp:
+        cmd = "printf '[Metric] Sharpe Ratio: 1.5\\n[Metric] IC Mean: 0.03\\n'"
+        assert run_verify_command(tmp, cmd)["metric"] == 1.5
+        assert run_verify_command(tmp, cmd, metric_pattern="[Metric] IC Mean:")["metric"] == 0.03
+
+
+def test_run_verification_passes_metric_pattern_from_conf():
+    """mode.conf's metric_pattern must reach parse_metric, not sit unused."""
+    with tempfile.TemporaryDirectory() as tmp:
+        conf = {
+            "verify_command": "printf '[Metric] Sharpe: 1.5\\n[Metric] IC: 0.03\\n'",
+            "metric_pattern": "[Metric] IC:",
+        }
+        result = run_verification(tmp, conf, verbose=False)
+        assert result["verify"]["metric"] == 0.03
+
+
+def test_phase_metric_written_as_string():
+    """LLMs write numbers as JSON strings. Phase detection must not crash."""
+    with tempfile.TemporaryDirectory() as tmp:
+        mode_dir = make_mode_dir(tmp, "researcher")
+        conf = load_conf(mode_dir)
+        state = Path(tmp) / "journal.json"
+        state.write_text(json.dumps(
+            {"experiments": [], "best_metric": "1.89", "target_metric": "1.5"}))
+        assert get_phase(state, conf) == "done"
+        state.write_text(json.dumps(
+            {"experiments": [], "best_metric": "0.5", "target_metric": "1.5"}))
+        assert get_phase(state, conf) == "init"
+
+
+def test_phase_unparseable_metric_is_not_progress():
+    """A metric that is not a number must not be read as target reached."""
+    with tempfile.TemporaryDirectory() as tmp:
+        mode_dir = make_mode_dir(tmp, "researcher")
+        conf = load_conf(mode_dir)
+        state = Path(tmp) / "journal.json"
+        state.write_text(json.dumps(
+            {"experiments": [], "best_metric": "n/a", "target_metric": 1.5}))
+        assert get_phase(state, conf) == "init"
+
+
 def test_verify_command_success():
     with tempfile.TemporaryDirectory() as tmp:
         result = run_verify_command(tmp, "echo '[Metric] Score: 95.5'")

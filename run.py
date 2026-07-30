@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-auto-dev-agentos v6.0 — Verification Harness for LLM Agent Loops
+auto-dev-agentos v6.1 — Verification Harness for LLM Agent Loops
 
 Structurally separate evaluator (Loop 2) that wraps around any agent loop.
 Independent verification, hidden out-of-sample validation, budget/stuck controls.
@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
-VERSION = "6.0"
+VERSION = "6.1"
 COMPLETE_SIGNAL = "<promise>COMPLETE</promise>"
 
 from core import load_conf, get_phase, progress_count, run_verification
@@ -255,12 +255,20 @@ async def engine(args):
     if not (project / entry).exists():
         sys.exit(f"No {entry} in {project}. Required for --mode {args.mode}.")
 
-    if not (project / "CLAUDE.md").exists():
-        src = mode_dir / conf.get("claude_md", "CLAUDE.md")
-        if not src.exists():
-            src = SCRIPT_DIR / "CLAUDE.md"
-        if src.exists():
-            (project / "CLAUDE.md").write_text(src.read_text())
+    # The project CLAUDE.md is an engine-owned runtime artifact (gitignored), so
+    # refresh it whenever the mode template changes. Leaving a stale copy in
+    # place would keep feeding old instructions to every future session.
+    src = mode_dir / conf.get("claude_md", "CLAUDE.md")
+    if not src.exists():
+        src = SCRIPT_DIR / "CLAUDE.md"
+    if src.exists():
+        dst = project / "CLAUDE.md"
+        template = src.read_text()
+        if not dst.exists():
+            dst.write_text(template)
+        elif dst.read_text() != template:
+            dst.write_text(template)
+            print(f"  Refreshed CLAUDE.md from modes/{args.mode} template")
 
     state_path = project / ".state" / conf.get("state_file", "tasks.json")
     sim_script, sim_idx = [], 0
@@ -274,7 +282,7 @@ async def engine(args):
     print(f"\n  {mode_label} | {args.mode} | max {args.max_sessions} sessions | ${args.max_budget:.0f} budget")
     print(f"  Project: {project}\n")
 
-    session, no_progress, total_cost = 0, 0, 0.0
+    session, sessions_run, no_progress, total_cost = 0, 0, 0, 0.0
 
     while True:
         session += 1
@@ -312,6 +320,7 @@ async def engine(args):
         print(f"\n{lp}[{ts()}] Session #{session} -- {phase} [{args.mode}]")
         r, sim_idx = await _dispatch(simulate, project, mode_dir, conf,
                                      phase, str(session), args.max_turns, sim_script, sim_idx)
+        sessions_run += 1
         total_cost += r["cost"]
         print(f"{lp}[{ts()}] #{session}: {r['status']} | "
               f"${r['cost']:.4f} | {r['turns']} turns | total ${total_cost:.4f}")
@@ -365,7 +374,7 @@ async def engine(args):
 
         await asyncio.sleep(args.pause)
 
-    print(f"\n{lp}[{ts()}] Done. {args.mode} | {session} sessions | ${total_cost:.4f}")
+    print(f"\n{lp}[{ts()}] Done. {args.mode} | {sessions_run} sessions | ${total_cost:.4f}")
 
 
 # ═══════════════════════════════════════════════════════════════

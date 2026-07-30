@@ -2,7 +2,31 @@
 
 ## [6.1.0] — 2026-07-30
 
+### Fixed
+- **`parse_metric` misread negative metrics.** `[^:]+` spanned newlines and the
+  number pattern had no sign, so `[Metric] Sharpe Ratio: -0.8363` did not match
+  its own line and the search fell through to the *next* `[Metric]` line —
+  returning `0.5550` (the annualized return) as the Sharpe. A losing run was
+  reported to the loop as a gain. Signs and scientific notation now parse, and
+  the label may no longer span lines
+- **`get_phase` crashed on a metric written as a JSON string.** `"1.89" >= 1.5`
+  raises `TypeError`, killing the engine mid-loop. Metrics are coerced via the
+  new `as_number()`; an unparseable value is treated as no progress, not as
+  target-reached
+- **`metric_pattern` was dead config.** Declared in `modes/researcher/mode.conf`
+  and in the v4.1 changelog, referenced by no code. It now flows through
+  `run_verification` → `run_verify_command` → `parse_metric`, selecting one
+  labelled metric when a command emits several
+- **A stale project `CLAUDE.md` was never refreshed.** The engine wrote it only
+  when absent, so an existing project kept receiving the mode instructions it
+  was first created with — including, until this release, the instruction to
+  append learnings to a gitignored file. The template is now re-copied when it
+  differs
+- **The run summary reported one more session than it ran.** The loop counter is
+  incremented before the exit check; the summary now counts sessions executed
+
 ### Added
+- 8 regression tests covering the metric and phase defects above (62 total)
 - **Tracked empirical record**: session transcripts (`examples/*/logs/`), archived
   run records (`examples/*/.state/history/`), and a distilled MLflow archive are
   now version-controlled. They were previously ignored, so a clone of this repo

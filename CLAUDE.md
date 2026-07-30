@@ -6,7 +6,7 @@
 
 A verification harness (Loop 2) for LLM agent loops. Two engines:
 - `run.py` (~485 lines of Python) — subcommand CLI: verify, loop, status, list-modes
-- `core.py` (~251 lines) — pure functions: verification API, state management, metrics
+- `core.py` (~277 lines) — pure functions: verification API, state management, metrics
 
 ## Architecture
 
@@ -26,7 +26,7 @@ A verification harness (Loop 2) for LLM agent loops. Two engines:
 - Smoke test: `python3 run.py status examples/todo-app`
 - Verify test: `python3 run.py verify examples/quant-lab --mode researcher`
 - Simulation test: `python3 run.py loop --simulate --mode engineer --pause 0 /tmp/test-project`
-- run.py must stay under 500 lines, core.py under 260 lines
+- run.py must stay under 500 lines, core.py under 290 lines
 - Pure functions go in core.py, not in run.py
 
 ## Key Design Rules

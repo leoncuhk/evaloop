@@ -50,6 +50,16 @@ def count_by_status(data: dict, jq_query: str) -> int:
     return sum(1 for item in items if _matches(item))
 
 
+def as_number(value):
+    """Coerce a state value to float, or None. LLMs write numbers as strings."""
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def get_phase(state_path: Path, conf: dict) -> str:
     """Determine current phase: init | work | done."""
     if not state_path.exists():
@@ -72,12 +82,10 @@ def get_phase(state_path: Path, conf: dict) -> str:
     )
     done_count = count_by_status(data, progress_q)
 
-    best = data.get("best_metric", 0)
-    target = data.get("target_metric", 0)
-    if target and best >= target:
-        return "done"
-    if target and best < target:
-        return "init"
+    best = as_number(data.get("best_metric")) or 0.0
+    target = as_number(data.get("target_metric"))
+    if target:
+        return "done" if best >= target else "init"
 
     if done_count == 0:
         return "init"
@@ -135,13 +143,27 @@ def validate_state(data: dict, mode: str) -> tuple:
     return (len(errors) == 0), errors
 
 
-def parse_metric(output: str):
-    """Extract metric from output. Looks for [Metric] <name>: <float>."""
-    m = re.search(r"\[Metric\]\s+[^:]+:\s*([0-9]*\.?[0-9]+)", output)
+_NUM = r"(-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)"
+_METRIC_RE = re.compile(r"\[Metric\]\s+[^:\n]+:\s*" + _NUM)
+
+
+def parse_metric(output: str, pattern: str = ""):
+    """Extract a metric from command output.
+
+    Reads the first parseable `[Metric] <name>: <number>` line. Negative values
+    and scientific notation are both valid metrics. `pattern` is mode.conf's
+    `metric_pattern` — the literal label prefix to select when a command emits
+    several `[Metric]` lines and a specific one is the target.
+    """
+    if pattern:
+        m = re.search(re.escape(pattern.strip()) + r"\s*" + _NUM, output)
+    else:
+        m = _METRIC_RE.search(output)
     return float(m.group(1)) if m else None
 
 
-def run_verify_command(project_dir: str, command: str, timeout: int = 60) -> dict:
+def run_verify_command(project_dir: str, command: str, timeout: int = 60,
+                       metric_pattern: str = "") -> dict:
     """Run a verification command and return structured result."""
     try:
         result = subprocess.run(
@@ -153,7 +175,7 @@ def run_verify_command(project_dir: str, command: str, timeout: int = 60) -> dic
             "exit_code": result.returncode,
             "stdout": result.stdout,
             "stderr": result.stderr,
-            "metric": parse_metric(result.stdout),
+            "metric": parse_metric(result.stdout, metric_pattern),
         }
     except subprocess.TimeoutExpired:
         return {"success": False, "exit_code": -1, "stdout": "", "stderr": "timeout", "metric": None}
@@ -219,9 +241,12 @@ def run_verification(project_dir: str, conf: dict, session_label: str = "",
     project = Path(project_dir)
     result = {"verify": None, "hidden": None}
 
+    metric_pattern = conf.get("metric_pattern", "")
+
     verify_cmd = resolve_verify_cmd(project, conf, "verify_command")
     if verify_cmd:
-        vr = run_verify_command(project_dir, verify_cmd, timeout=300)
+        vr = run_verify_command(project_dir, verify_cmd, timeout=300,
+                                metric_pattern=metric_pattern)
         result["verify"] = vr
         if verbose:
             status = "PASS" if vr["success"] else "FAIL"
@@ -230,7 +255,8 @@ def run_verification(project_dir: str, conf: dict, session_label: str = "",
 
     hidden_cmd = resolve_verify_cmd(project, conf, "hidden_verify_command")
     if hidden_cmd:
-        hr = run_verify_command(project_dir, hidden_cmd, timeout=300)
+        hr = run_verify_command(project_dir, hidden_cmd, timeout=300,
+                                metric_pattern=metric_pattern)
         result["hidden"] = hr
         state_dir = project / ".state"
         state_dir.mkdir(parents=True, exist_ok=True)
