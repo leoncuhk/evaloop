@@ -70,7 +70,7 @@ If any check fails → fix the issue → re-run checks → repeat until clean.
 
 ### Step 6: Update Learnings
 
-Append any discoveries to the `## Learnings` section in `CLAUDE.md`:
+Append any discoveries to `.state/learnings.md` (create it if absent):
 - Patterns: "This project uses X for Y"
 - Gotchas: "When changing X, must also update Y"
 - Context: "The main routes are in server.js"

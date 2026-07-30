@@ -1,0 +1,17 @@
+Design complete. I'm the Theorizer — my scope ends at experiment design, so I'm stopping here without implementing the swap or running anything. I've left the plan in the working-tree state files for the Executor (no commit, per the "commit only on metric improvement" rule — nothing was measured yet).
+
+## EXP-011 — Feature handler `Alpha158 → Alpha360`
+
+**Why this experiment:** Rounds 0–10 swept the entire model-HP space to a single-peaked optimum (**Sharpe 3.6430**, λ1=100/λ2=200). Every scalar lever was probed on both sides of its peak — re-tuning any is a known dead end. The largest untouched lever, and the project's actual goal, is **feature engineering**. I also confirmed the only *supported* feature lever in this harness is the handler class: the runner ignores `n_drop`/`hold_thresh` (no real TopkDropout) and `custom_factors.py` is unwired. `Alpha360` imports cleanly.
+
+**The change (one line):** in `qlib_config.yaml`, `dataset.kwargs.handler.class: Alpha158 → Alpha360`. Everything else (dates, `csi300`, model HPs) held fixed.
+
+**Hypothesis:** Alpha360's 360 raw normalized OHLCV features (60-day window) give the GBDT a lower-bias view than Alpha158's 158 hand-engineered indicators; trees can learn interactions the fixed expressions can't represent.
+
+**Decision rule (the important part):**
+- Sharpe **> 3.6430** → accept, commit. Alpha360 wins outright.
+- Sharpe **≤ 3.6430** → **do not** conclude feature engineering failed. The result is **confounded with λ mis-scaling** — λ=100/200 was tuned for 158 features, and Alpha360 has 360 at a different scale. Record the number, revert, and hand to **contingent EXP-012** (re-run the proven λ sweep with the handler fixed at Alpha360) before any verdict.
+
+**Recorded:** `journal.json` now holds EXP-011 (pending) + EXP-012 (contingent) alongside the preserved rounds 0–10; `progress.md` has the Session 12 entry. I also restored the three `.state/` files that had been deleted from the working tree (rules forbid losing journal history).
+
+**Handoff to Executor:** edit the one line → `python run_qlib_backtest.py --split train` → parse `[Metric] Sharpe Ratio:` → apply the decision rule → never run `--split test`.

@@ -48,6 +48,11 @@ Outer OODA Loop (every N sessions):
     Iterate         — Retry if failed, return to outer loop if verified
 ```
 
+![The v4.0 architecture: the outer OODA loop and inner SDK loop side by side, the three operating modes with their role sequences, the file-based state each mode carries, and the failure mode each principle addresses](../assets/dual-loop.png)
+
+*Figure: the architecture as of v4.0, when the outer loop was introduced. The
+state-file lists predate `.state/learnings.md`; the loop structure is unchanged.*
+
 ## Why Orient Can't Be Implicit
 
 In auto-dev-agentos v3.0, the Reviewer (engineer mode) and Analyst (researcher mode) partially fill the Orient role. They check health metrics and detect stuck patterns. But they have a structural limitation: **they run at the same level as the work sessions**.

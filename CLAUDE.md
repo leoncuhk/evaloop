@@ -13,6 +13,9 @@ A verification harness (Loop 2) for LLM agent loops. Two engines:
 - `core.py` — verification harness core (`run_verification`, `resolve_verify_cmd`, state, metrics)
 - `run.py` — CLI + optional session loop (wraps core.py verification around agent sessions)
 - `modes/<name>/` — mode-specific logic (mode.conf + CLAUDE.md + prompts/)
+- `examples/<project>/.state/learnings.md` — cross-session knowledge, tracked
+- `examples/<project>/.state/history/` — archived records of completed runs
+- `examples/<project>/logs/` — verbatim session transcripts, tracked
 - `tests/test_run.py` — unit tests for core.py functions
 - `tests/test_integration.py` — integration tests (loop orchestration + standalone verification)
 
@@ -36,3 +39,8 @@ A verification harness (Loop 2) for LLM agent loops. Two engines:
 6. **State validation** — JSON state validated before write, backed up before overwrite
 7. **Budget cap** — max cost per run prevents runaway spending
 8. **Minimal** — no frameworks, no Docker, no magic
+9. **Evidence is tracked** — session transcripts, archived runs, and learnings are
+   version-controlled. Resetting an example to baseline means moving its records
+   into `.state/history/`, never deleting them.
+10. **Claims cite files** — anything the README asserts about what was measured
+    must point at a tracked artifact that a reader can open.

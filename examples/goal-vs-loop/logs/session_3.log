@@ -1,0 +1,21 @@
+Done. As Theorizer, I designed the next experiment and stopped — no code implemented, no backtest run (that's the Executor's job).
+
+## EXP-002 — Conviction-based position sizing
+
+**Where things stand:** EXP-001 (neutralize the −0.5 short leg) closed most of the gap, 0.8363 → **1.3477**. Remaining gap to the **1.5** target is ~0.15, and the lever is now the *long leg* — the strategy is currently a binary long/flat timer.
+
+**Hypothesis:** A binary signal weights a marginal, just-crossed-over trend the same as a powerful one. The DGP has positive momentum autocorrelation (AR(1)=0.15), so *wide* MA spreads = established trends that are more likely to persist. Sizing exposure by spread should concentrate weight in the high-persistence regimes and lighten up near whipsaw-prone crossovers.
+
+**The change (single variable):** Replace the binary mapping with
+```python
+spread = (fast_ma - slow_ma) / slow_ma
+signals = (spread * 25).clip(lower=0.0, upper=1.0).fillna(0.0)
+```
+Negative spread clips to 0 → **strictly preserves EXP-001's flat-on-downtrend win**; positive spread scales up to a cap of 1.0. `fast=10, slow=20` unchanged, so K (=25) is the only new knob.
+
+**Success:** Sharpe > 1.3477 (new best). Built-in diagnostics for the Executor if it misses:
+- ≈1.3477 → K too large (clipping to ~binary), retry K=10–15
+- <1.3477 (but >0.84) → conviction not adding value, pivot to MA-window tuning or a momentum-confirmation filter
+- <0.84 → hard revert floor
+
+**Recorded:** EXP-002 appended to `.state/journal.json` (status `pending`), Session 3 logged in `progress.md`, committed as `40811d3`. I also flagged the standing overfitting caveat — all gains are on the visible all-data metric; the hidden test split is the real robustness check as knobs get tuned.

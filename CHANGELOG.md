@@ -1,5 +1,30 @@
 # Changelog
 
+## [6.1.0] — 2026-07-30
+
+### Added
+- **Tracked empirical record**: session transcripts (`examples/*/logs/`), archived
+  run records (`examples/*/.state/history/`), and a distilled MLflow archive are
+  now version-controlled. They were previously ignored, so a clone of this repo
+  contained no evidence that any mode had ever been run against a live model.
+- `examples/goal-vs-loop/session-history.bundle` — the nested git repo produced by
+  the 4-session run, as a clonable bundle
+- `examples/*/.state/learnings.md` — accumulated cross-session knowledge, tracked.
+  Previously appended to the engine-copied `CLAUDE.md`, which is gitignored, so
+  every learning was lost on the next run
+- **Empirical Record** section in README: what was measured, against which files,
+  and what those numbers do not show
+
+### Changed
+- Recovered the 11-round qlib hyperparameter journal and progress log that the
+  v6.0 baseline reset discarded, into `examples/qlib-quant/.state/history/`
+- All three mode templates and their prompts now read and write
+  `.state/learnings.md` instead of the `## Learnings` section of `CLAUDE.md`
+- Scoped down the hidden-OOS claim in the README. The orchestrator not surfacing
+  the hidden metric is not the same as the agent being unable to compute it —
+  `examples/goal-vs-loop/logs/session_4.log` shows a session doing exactly that
+- `docs/dual-loop-architecture.md` now includes the v4.0 architecture diagram
+
 ## [6.0.0] — 2026-06-22
 
 ### Changed

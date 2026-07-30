@@ -14,7 +14,7 @@ Read the following files (use the Read tool):
 - `standards.md` — audit criteria and scope
 - `.state/findings.json` — all findings with evidence and status
 - `.state/progress.md` — full session history (scan ALL `**Role**: Strategist` entries)
-- `CLAUDE.md` — accumulated learnings
+- `.state/learnings.md` — accumulated learnings
 
 Use Grep to search progress.md for `**Role**: Strategist` entries.
 

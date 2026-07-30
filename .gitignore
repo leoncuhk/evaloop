@@ -8,5 +8,10 @@ build/
 logs/
 *.log
 mlruns/
-# Runtime artifacts copied into project dirs by the engine
+# Empirical record — session transcripts are evidence, not noise. They are the
+# only record that a mode was ever run against a live model, so they are tracked.
+!examples/*/logs/
+!examples/*/logs/*.log
+# Runtime artifacts copied into project dirs by the engine.
+# Learnings live in .state/learnings.md (tracked), NOT in this copied file.
 examples/*/CLAUDE.md

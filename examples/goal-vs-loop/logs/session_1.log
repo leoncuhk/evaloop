@@ -1,0 +1,20 @@
+Done. As the **Theorizer Agent**, I've completed experiment design and scaffolding. Per my scope limit, I'm **stopping here without implementing** — the Executor Agent handles the strategy change.
+
+## Summary
+
+**Baseline confirmed:** `python3 run_backtest.py` → Sharpe **0.8363** (visible all-data split). A hidden out-of-sample test split exists (orchestrator-only); I deliberately kept it out of the journal so future sessions optimize the visible metric honestly.
+
+**Designed EXP-001 — neutralize the short leg:**
+- **Hypothesis:** The `-0.5` short on every downtrend signal is the main drag. The series has positive drift (~12.6% annualized) *plus* 0.15 momentum autocorrelation, so shorting fights the secular uptrend and bleeds on whipsaws.
+- **Change (one variable):** `signals[fast_ma <= slow_ma] = -0.5` → `= 0.0` (long-flat instead of long-short), keeping fast=10/slow=20.
+- **Success threshold:** Sharpe > 0.84 from `python run_backtest.py`; revert otherwise.
+- **Why first:** highest-confidence, single-variable change; isolates whether the short leg is the problem before adding complexity.
+
+**Logged candidate directions** for later sessions (MA-window tuning on the flat base, conviction sizing via normalized MA spread, volatility targeting, momentum/ROC confirmation filter).
+
+**State written & committed** (`ffaf2c5`):
+- `.state/journal.json` — EXP-001 with concrete steps + candidate directions
+- `.state/progress.md` — Session 1 record
+- `.gitignore` — excludes `__pycache__/`, `*.pyc`, `logs/`
+
+**Handoff to Executor:** implement EXP-001 step-by-step from `.state/journal.json`, run the backtest, keep/revert on the 0.84 threshold, and record the result.

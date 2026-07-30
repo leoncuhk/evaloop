@@ -1,0 +1,51 @@
+{
+  "note": "Distilled from the MLflow file store produced by run_qlib_backtest.py. mlruns/ itself is gitignored; this archive is the tracked record. The `command` field shows which split each run evaluated.",
+  "runs": [
+    {
+      "run_id": "921ee070c66a4a17b83e12c165ab33a0",
+      "experiment_id": "281107716649488079",
+      "start_time": "2026-06-22T15:19:31.250000+00:00",
+      "end_time": "2026-06-22T15:19:38.115000+00:00",
+      "command": "run_qlib_backtest.py --split train",
+      "git_commit": "e8bf29f6ba03936d33d322ad3e21d68fa243064b",
+      "source": "run_qlib_backtest.py",
+      "metrics": {
+        "l2.train": {
+          "steps": 76,
+          "first": 0.9963868207234956,
+          "last": 0.986212734519091,
+          "min": 0.986212734519091
+        },
+        "l2.valid": {
+          "steps": 76,
+          "first": 0.9966180534749176,
+          "last": 0.9961861239087126,
+          "min": 0.9959489571988238
+        }
+      }
+    },
+    {
+      "run_id": "aeaa93e5fd7b4b13814d8975da7a79bd",
+      "experiment_id": "281107716649488079",
+      "start_time": "2026-06-22T15:22:44.472000+00:00",
+      "end_time": "2026-06-22T15:22:52.574000+00:00",
+      "command": "run_qlib_backtest.py --split test",
+      "git_commit": "e8bf29f6ba03936d33d322ad3e21d68fa243064b",
+      "source": "run_qlib_backtest.py",
+      "metrics": {
+        "l2.train": {
+          "steps": 76,
+          "first": 0.9963868207234955,
+          "last": 0.986212734519091,
+          "min": 0.986212734519091
+        },
+        "l2.valid": {
+          "steps": 76,
+          "first": 0.9966180534749176,
+          "last": 0.9961861239087126,
+          "min": 0.995948957198824
+        }
+      }
+    }
+  ]
+}

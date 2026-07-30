@@ -14,6 +14,7 @@ You are one session in a long-running autonomous pipeline. You have **NO memory*
 | `.state/tasks.json` | Task queue with status, steps, acceptance_criteria, and verify_command |
 | `.state/progress.md` | Append-only work log |
 | `.state/features.json` | Feature checklist with `passes` boolean |
+| `.state/learnings.md` | Accumulated project knowledge — read first, append last |
 
 ## Workflow (every session)
 
@@ -23,6 +24,7 @@ You are one session in a long-running autonomous pipeline. You have **NO memory*
 cat spec.md
 cat .state/tasks.json
 tail -50 .state/progress.md
+cat .state/learnings.md 2>/dev/null || true
 git log --oneline -10 2>/dev/null || true
 ```
 
@@ -64,10 +66,14 @@ If any check fails, **fix the issue first**. Do not commit broken code.
 
 ### 5. Update Learnings
 
-Append any discoveries to the `## Learnings` section at the bottom of this file:
+Append any discoveries to `.state/learnings.md` (create it if absent):
 - Patterns discovered ("this project uses X for Y")
 - Gotchas ("when changing X, must also update Y")
 - Useful context ("the main API routes are in server.js")
+
+Write them there, **not** into this file: this `CLAUDE.md` is a copy of the mode
+template that the engine drops into the project, so it is not version-controlled
+and anything you append to it is lost on the next run.
 
 ### 6. Commit
 
@@ -88,7 +94,4 @@ After ONE task, stop. The orchestrator starts a new session with fresh context.
 4. **Keep code working** — Every commit = buildable state
 5. **Respect existing patterns** — Follow conventions already in the project
 6. **If stuck** — Write `BLOCKED:` in progress.md and stop immediately
-
-## Learnings
-
-<!-- Agents append discoveries here. Future sessions benefit from this knowledge. -->
+7. **Read past learnings** — check `.state/learnings.md` before starting a task

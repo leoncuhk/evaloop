@@ -108,7 +108,7 @@ The cost? Each session re-reads the state files. This takes 5-10 seconds of LLM 
 State lives in structured files:
 - `tasks.json` / `journal.json` — work queue with status tracking
 - `progress.md` — append-only log of what happened
-- `CLAUDE.md` Learnings section — accumulated knowledge
+- `learnings.md` — accumulated cross-session knowledge
 - Git history — full audit trail
 
 This design has three critical advantages:

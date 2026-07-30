@@ -1,0 +1,23 @@
+EXP-001 complete and committed. One experiment per session — stopping here.
+
+## Session summary
+
+**Experiment EXP-001** — neutralize the `-0.5` short leg (flat `0.0` on downtrend signals)
+
+| | Value |
+|---|---|
+| Metric before | **0.8363** (baseline) |
+| Metric after | **1.3477** |
+| Change | **+0.5114** |
+| Decision | ✅ **Accepted** — new best, committed (`fbb7096`) |
+| Target (1.5) reached? | No — not yet |
+
+**Change made:** `strategies.py` line 11, `signals[fast_ma <= slow_ma] = -0.5` → `= 0.0`.
+
+**What it confirmed:** The short leg was the dominant drag on risk-adjusted return. Shorting on every `fast<=slow` signal fought the series' positive drift and lost on momentum whipsaws; going flat removed that drag. A single-variable change captured most of the gap to target.
+
+**State recorded:** journal `best_metric` → 1.3477, EXP-001 → `accepted` with full record; progress.md Session 2 appended; metric verified reproducible after commit.
+
+**Next direction (~0.15 gap to 1.5):** the long leg is now the lever — conviction sizing on normalized MA spread, MA-window tuning, or a volatility/momentum filter. ⚠️ Caveat for future sessions: gains are on the **visible all-data** metric only; out-of-sample (hidden test split) robustness is unverified, so watch for overfitting as parameters get tuned.
+
+Not at target, so no completion signal. The orchestrator can start the next session.

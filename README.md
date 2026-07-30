@@ -95,7 +95,9 @@ hidden_verify_command = python qlib_backtest.py --split test
 
 ### 2. Hidden out-of-sample validation
 
-`hidden_verify_command` runs on data the LLM never sees. The metric is written to `.state/hidden_metrics.json` but **never fed back** to the LLM — an architectural guarantee, not a prompt-based one.
+`hidden_verify_command` runs on data the LLM never sees. The metric is written to `.state/hidden_metrics.json` and is **never fed back** to the LLM by the orchestrator.
+
+> **Scope of this guarantee.** The orchestrator does not surface the hidden metric. It does **not** prevent an agent from computing it — the agent has shell access, and the hidden split is one flag away. A live session in [`examples/goal-vs-loop/logs/session_4.log`](examples/goal-vs-loop/logs/session_4.log) did exactly that, transparently reporting `hidden test split = 1.5233` in its own summary. Enforcing the split requires putting the hidden data or the command that reads it outside the agent's reach (separate filesystem permissions, a separate process, or a sandbox boundary). That is not implemented. Until it is, treat any hidden-OOS figure produced inside a session as contaminated.
 
 ```json
 [
@@ -139,9 +141,64 @@ auto-dev-agentos/
 ├── tests/
 │   ├── test_run.py     # Unit tests (17 tests)
 │   └── test_integration.py  # Integration tests (37 tests)
+├── experiments/        # run_validation.py — orchestrator conformance checks
 ├── docs/               # Design rationale and methodology
-└── examples/           # Demo projects (todo-app, quant-lab, qlib-quant)
+└── examples/           # Demo projects (todo-app, quant-lab, qlib-quant, goal-vs-loop)
+    └── <project>/
+        ├── .state/learnings.md   # Cross-session knowledge (tracked)
+        ├── .state/history/       # Archived records of completed runs
+        └── logs/                 # Verbatim session transcripts
 ```
+
+## Empirical Record
+
+What has and has not actually been measured. Every claim below points at a file
+in this repository, so it can be checked rather than taken on trust.
+
+### What was run against a live model
+
+| Example | Sessions | Outcome | Record |
+|---|---|---|---|
+| `examples/goal-vs-loop` | 4 (Theorizer/Executor ×2) | Sharpe 0.8363 → 1.9084 on synthetic data, target 1.5 met | [`logs/`](examples/goal-vs-loop/logs/), [`.state/history/`](examples/goal-vs-loop/.state/history/), and `session-history.bundle` (`git clone` it to replay all 5 commits) |
+| `examples/qlib-quant` | 12, incl. an 11-round sweep | Sharpe 2.9746 → 3.6430 on the 2022 segment of CSI300 | [`.state/history/`](examples/qlib-quant/.state/history/), [`logs/`](examples/qlib-quant/logs/), [`.state/learnings.md`](examples/qlib-quant/.state/learnings.md) |
+
+Both working trees are reset to baseline so the examples start clean; the runs
+above are preserved under `.state/history/` rather than in the live state files.
+
+### What those numbers do not show
+
+- **The qlib sweep selected on the segment it scored on.** `--split train` maps
+  to the 2022 *valid* segment, and all 11 rounds were chosen by that number. The
+  +22.5% is a selection gain, not an out-of-sample result.
+- **The hidden split was executed once and the result was lost.**
+  [`mlflow-runs.json`](examples/qlib-quant/.state/history/mlflow-runs.json)
+  records a `--split test` run at commit `e8bf29f`, but no `hidden_metrics.json`
+  was ever written. There is no recorded hidden-OOS figure for this example.
+- **`run_qlib_backtest.py` is not qlib's backtest pipeline.** It implements its
+  own top-30/bottom-30 long-short with daily full turnover and no transaction
+  cost, slippage, or position limits — despite `hypothesis.md` requiring the
+  standard pipeline. The configured `topk`/`n_drop` are read but never applied.
+  A Sharpe near 3–4 under zero cost is the expected magnitude of that
+  construction, not evidence of an edge.
+- **goal-vs-loop runs on synthetic data** with injected drift and AR(1)=0.15
+  momentum. The mechanism the agent found is real *for that generator* and says
+  nothing about real markets.
+
+### What `experiments/run_validation.py` does and does not test
+
+It checks the orchestrator, not the loop's effectiveness:
+
+- **H1 (convergence)** and **H3 (phase decisions)** run against hardcoded
+  `SIMULATION_SCRIPTS` whose metric trajectories are written into the script. They
+  demonstrate that the state machine advances and halts correctly. They cannot
+  demonstrate that a loop converges, because convergence is an input.
+- **H2 (generalization)** compares two hand-written strategies across 12 seeds —
+  neither was discovered by a loop. At 7/12 the result is not statistically
+  distinguishable from chance (binomial *p* ≈ 0.39 against a fair coin), and the
+  script's `win_rate >= 55` pass threshold is an arbitrary cutoff, not a test.
+
+Read it as a conformance suite for the orchestrator. An end-to-end validation —
+many live runs, measured against a control — has not been done.
 
 ## CLI Reference
 

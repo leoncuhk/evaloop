@@ -14,6 +14,7 @@ You are one session in an **iterative research pipeline**. You have **NO memory*
 | `.state/journal.json` | Experiment log — every attempt recorded with metrics + learnings |
 | `.state/progress.md` | Append-only session log |
 | `.state/best_metric.txt` | Current best metric value (single number) |
+| `.state/learnings.md` | Accumulated cross-experiment knowledge — read first, append last |
 
 ## Key Differences from Engineer Mode
 
@@ -30,6 +31,7 @@ You are one session in an **iterative research pipeline**. You have **NO memory*
 cat hypothesis.md
 cat .state/journal.json
 tail -50 .state/progress.md
+cat .state/learnings.md 2>/dev/null || true
 cat CLAUDE.md
 git log --oneline -10 2>/dev/null || true
 ```
@@ -55,8 +57,12 @@ Follow the instructions in your specific prompt file.
 
 ### 4. Update Learnings
 
-Append **every** discovery to the `## Learnings` section at the bottom of this file.
+Append **every** discovery to `.state/learnings.md` (create it if absent).
 These are critical for future sessions — they prevent repeating failed experiments.
+
+Write them there, **not** into this file: this `CLAUDE.md` is a copy of the mode
+template that the engine drops into the project, so it is not version-controlled
+and anything you append to it is lost on the next run.
 
 ### 5. Commit (only on improvement)
 
@@ -83,8 +89,5 @@ After ONE experiment cycle, stop. The orchestrator starts a new session.
 4. **Record everything** — even failed experiments have value as learnings
 5. **Never delete journal entries** — the history of failures IS the knowledge
 6. **If stuck** — write `BLOCKED:` in progress.md and stop immediately
-7. **Read past learnings** — check `## Learnings` and journal.json before proposing
-
-## Learnings
-
-<!-- Agents append discoveries here. Future sessions benefit from this knowledge. -->
+7. **Read past learnings** — check `.state/learnings.md` and journal.json before proposing
+8. **Never delete `.state/history/`** — archived runs are the record that this mode was executed

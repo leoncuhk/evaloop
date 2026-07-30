@@ -14,7 +14,7 @@ Read the following files (use the Read tool):
 - `hypothesis.md` — research goals, baseline, target metrics
 - `.state/journal.json` — all experiment records and learnings
 - `.state/progress.md` — full session history (scan ALL `**Role**: Strategist` entries for previous Orient decisions)
-- `CLAUDE.md` — accumulated learnings
+- `.state/learnings.md` — accumulated learnings
 
 Use Grep to search progress.md for `**Role**: Strategist` entries.
 
@@ -100,5 +100,5 @@ This record is critical — the next Strategist session reads it to maintain str
 3. NEVER recommend retrying a documented dead end — check all learnings first
 4. If pivoting, clearly state what changed in the mental model — "we now believe X because experiments showed Y"
 5. "Search space exhausted" is a valid and honest outcome — declare it rather than running more futile experiments
-6. Read ALL learnings in CLAUDE.md and journal.json before deciding — your value comes from synthesizing across experiments, not from any single result
+6. Read ALL learnings in `.state/learnings.md` and journal.json before deciding — your value comes from synthesizing across experiments, not from any single result
 7. Check previous Orient decisions in progress.md before deciding — strategic coherence matters

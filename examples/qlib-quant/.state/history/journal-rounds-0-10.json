@@ -1,0 +1,19 @@
+{
+  "objective": "Maximize Sharpe of run_qlib_backtest.py --split train (2022 valid segment). --split test never run (hidden).",
+  "baseline_sharpe": 2.9746,
+  "best_sharpe": 3.6430,
+  "best_params": {"learning_rate": 0.0421, "num_leaves": 128, "max_depth": 8, "lambda_l1": 100.0, "lambda_l2": 200.0, "colsample_bytree": 0.8879, "subsample": 0.8789},
+  "experiments": [
+    {"round": 0, "params": "baseline l1=205.7,l2=581,nl=210,md=8,lr=0.0421", "sharpe": 2.9746, "decision": "baseline"},
+    {"round": 1, "params": "l1=50,l2=100", "sharpe": 3.2075, "decision": "accepted", "learning": "over-regularized; less reg helps"},
+    {"round": 2, "params": "l1=5,l2=10", "sharpe": 2.6148, "decision": "rejected", "learning": "too little reg overfits train"},
+    {"round": 3, "params": "l1=100,l2=200", "sharpe": 3.6430, "decision": "accepted(best)", "learning": "lambda peak"},
+    {"round": 4, "params": "l1=150,l2=300", "sharpe": 3.3430, "decision": "rejected", "learning": "confirms peak at 100/200"},
+    {"round": 5, "params": "num_leaves 210->128", "sharpe": 3.6430, "decision": "kept(equal)", "learning": "num_leaves not binding; capped by max_depth+lambda"},
+    {"round": 6, "params": "lr=0.02", "sharpe": 3.2294, "decision": "rejected", "learning": "lower lr hurts"},
+    {"round": 7, "params": "lr=0.07", "sharpe": 3.0783, "decision": "rejected", "learning": "higher lr hurts; lr=0.0421 optimal"},
+    {"round": 8, "params": "max_depth=10", "sharpe": 3.0794, "decision": "rejected", "learning": "deeper overfits"},
+    {"round": 9, "params": "max_depth=6", "sharpe": 3.2114, "decision": "rejected", "learning": "shallower underfits; md=8 optimal"},
+    {"round": 10, "params": "l1=110,l2=220", "sharpe": 3.3303, "decision": "rejected", "learning": "sharp peak exactly at 100/200"}
+  ]
+}

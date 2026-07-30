@@ -15,7 +15,7 @@ Read the following files (use the Read tool):
 - `.state/tasks.json` — current task queue and statuses
 - `.state/progress.md` — full session history (focus on last 50 lines for recent, but scan ALL `**Role**: Strategist` entries)
 - `.state/features.json` — feature pass/fail status (if it exists)
-- `CLAUDE.md` — accumulated learnings
+- `.state/learnings.md` — accumulated learnings
 
 Use Grep to find: `git log --oneline` equivalent information is in `.state/progress.md` session entries.
 
@@ -42,7 +42,7 @@ Based on ALL accumulated evidence (progress.md + tasks.json + git log):
 - Are dependencies correctly ordered? (Task failing because prerequisite not done?)
 - Have any assumptions from spec.md been invalidated by implementation?
 - Are there systemic issues? (Same category of failure recurring?)
-- Are the Learnings in CLAUDE.md being applied by subsequent sessions?
+- Are the learnings in `.state/learnings.md` being applied by subsequent sessions?
 
 ### 3. Decision
 
@@ -92,5 +92,5 @@ Append to `.state/progress.md`:
 3. Recurring failures on similar tasks = missing prerequisite — add it
 4. Never delete or revert completed tasks
 5. Keep adjustments minimal and focused — don't redesign the whole plan
-6. Read ALL learnings in CLAUDE.md before making recommendations
+6. Read ALL learnings in `.state/learnings.md` before making recommendations
 7. Check previous Orient decisions in progress.md — strategic coherence matters
