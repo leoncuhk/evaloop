@@ -14,6 +14,13 @@ is a metric, and the machinery that keeps that metric meaningful while an agent
 optimises against it.
 
 ### Removed
+- **`experiments/run_validation.py`.** It printed "the Loop Engineering approach
+  is VALIDATED" and did not establish that: two of its three hypotheses ran
+  against hardcoded scripts whose metric trajectories were written into the file,
+  so convergence was an input rather than a finding, and the third compared two
+  hand-written strategies at 7/12 seeds — indistinguishable from a coin — against
+  an arbitrary 55% threshold. What it genuinely checked is covered by the test
+  suite and by CI. Removed rather than kept with a corrected verdict
 - **Engineer and auditor modes**, with `examples/todo-app` and
   `examples/audit-demo`. `--mode` now defaults to `researcher`
 - `assets/auto-dev-agentos-architecture.png`, replaced by a diagram of what the
@@ -36,6 +43,10 @@ optimises against it.
 - `examples/tamper-demo` rebuilt on the shipped loop
 
 ### Added
+- **`examples/qlib-quant/PREREQUISITES.md`.** That example needs pyqlib,
+  LightGBM and ~800 MB of CSI300 data, none of which ship here — a fresh clone
+  could only fail at it, with nothing explaining why. Also records the
+  pyOpenSSL/cryptography conflict that breaks it on some environments
 - **`assets/evaloop-architecture.png`**: the orchestrator outside the project,
   the sealed config and held-out data reaching only the orchestrator, and the
   path from held-out data into the project drawn as blocked

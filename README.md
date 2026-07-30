@@ -228,7 +228,6 @@ evaloop/
 ├── tests/
 │   ├── test_run.py     # Unit tests (17 tests)
 │   └── test_integration.py  # Integration tests (64 tests)
-├── experiments/        # run_validation.py — orchestrator conformance checks
 ├── docs/               # Design rationale and methodology
 └── examples/           # quant-lab, qlib-quant, goal-vs-loop, tamper-demo
     └── <project>/
@@ -247,7 +246,7 @@ in this repository, so it can be checked rather than taken on trust.
 | Example | Sessions | Outcome | Record |
 |---|---|---|---|
 | `examples/goal-vs-loop` | 4 (Theorizer/Executor ×2) | Sharpe 0.8363 → 1.9084 on synthetic data, target 1.5 met | [`logs/`](examples/goal-vs-loop/logs/), [`.state/history/`](examples/goal-vs-loop/.state/history/), and `session-history.bundle` (`git clone` it to replay all 5 commits) |
-| `examples/qlib-quant` | 12, incl. an 11-round sweep | Sharpe 2.9746 → 3.6430 on the 2022 segment of CSI300 | [`.state/history/`](examples/qlib-quant/.state/history/), [`logs/`](examples/qlib-quant/logs/), [`.state/learnings.md`](examples/qlib-quant/.state/learnings.md) |
+| `examples/qlib-quant`<br>([prerequisites](examples/qlib-quant/PREREQUISITES.md)) | 12, incl. an 11-round sweep | Sharpe 2.9746 → 3.6430 on the 2022 segment of CSI300 | [`.state/history/`](examples/qlib-quant/.state/history/), [`logs/`](examples/qlib-quant/logs/), [`.state/learnings.md`](examples/qlib-quant/.state/learnings.md) |
 
 Both working trees are reset to baseline so the examples start clean; the runs
 above are preserved under `.state/history/` rather than in the live state files.
@@ -271,21 +270,19 @@ above are preserved under `.state/history/` rather than in the live state files.
   momentum. The mechanism the agent found is real *for that generator* and says
   nothing about real markets.
 
-### What `experiments/run_validation.py` does and does not test
+### What has not been measured
 
-It checks the orchestrator, not the loop's effectiveness:
+An end-to-end validation — many live runs against a control — has not been done.
 
-- **H1 (convergence)** and **H3 (phase decisions)** run against hardcoded
-  `SIMULATION_SCRIPTS` whose metric trajectories are written into the script. They
-  demonstrate that the state machine advances and halts correctly. They cannot
-  demonstrate that a loop converges, because convergence is an input.
-- **H2 (generalization)** compares two hand-written strategies across 12 seeds —
-  neither was discovered by a loop. At 7/12 the result is not statistically
-  distinguishable from chance (binomial *p* ≈ 0.39 against a fair coin), and the
-  script's `win_rate >= 55` pass threshold is an arbitrary cutoff, not a test.
-
-Read it as a conformance suite for the orchestrator. An end-to-end validation —
-many live runs, measured against a control — has not been done.
+Through 6.x this repository shipped `experiments/run_validation.py`, which
+printed "the Loop Engineering approach is VALIDATED". It did not establish that.
+Two of its three hypotheses ran against hardcoded scripts whose metric
+trajectories were written into the file, so convergence was an input rather than
+a finding; the third compared two hand-written strategies across 12 seeds, at
+7/12 — indistinguishable from a coin (binomial *p* ≈ 0.39) — against an arbitrary
+55% pass threshold. What it genuinely checked, phase decisions and end-to-end
+orchestration, is covered by the test suite and by CI. It was removed in 7.0
+rather than kept with a corrected verdict.
 
 ## CLI Reference
 
