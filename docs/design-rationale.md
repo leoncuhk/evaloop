@@ -178,5 +178,5 @@ the configuration to use when that matters.
 - [Building Effective AI Coding Agents](https://arxiv.org/abs/2603.05344) — Scaffolding + harness architecture (arXiv, 2026)
 - [Spec-Driven Development](https://github.com/github/spec-kit) — GitHub's approach to spec → code
 - [BMAD Method](https://github.com/24601/BMAD-AT-CLAUDE) — 26-agent framework
-- [The Stateless Agent Architecture](stateless-agent-architecture.md) — Full argument
-- [The Dual-Loop Architecture](dual-loop-architecture.md) — Strategic orientation via OODA
+- [The Stateless Agent Architecture](archive/stateless-agent-architecture.md) — Full argument
+- [The Dual-Loop Architecture](archive/dual-loop-architecture.md) — Strategic orientation via OODA
