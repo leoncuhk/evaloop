@@ -181,7 +181,36 @@ The metric above was produced by definitions this session rewrote. Do not treat 
 
 This is the architecture [sandbox-policy research](https://github.com/islo-labs/reward-hack-bench) converges on — scoring runs where the agent does not control it, and the verdict is computed outside the agent's reach. Detection is the weakest of the three and is honest about it: it marks a metric contaminated, it never certifies one clean. For adversarial settings, seal the config *and* run the hidden command against data on a filesystem the agent cannot read.
 
-### 4. Budget & stuck controls
+### 4. What this runs on your machine
+
+`run.py loop` starts an agent **with permissions bypassed** — `bypassPermissions`
+on the SDK path, `--dangerously-skip-permissions` on the CLI path. That is
+deliberate: a loop that stops for approval every session is not autonomous. It
+also means the agent executes shell commands in your project directory without
+asking, for as many sessions as your limits allow.
+
+There is a `PreToolUse` hook that refuses a short list of obviously destructive
+commands (`rm -rf /`, `git push --force`, `DROP TABLE`, …). It matches
+substrings, so it is a guard against an agent's accident, **not a security
+boundary against an adversarial one**. Measured against its own list:
+
+| Command | Result |
+|---|---|
+| `rm -rf /` | blocked |
+| `cd / && rm -rf .` | blocked |
+| `rm -fr /` | **allowed** |
+| `rm  -rf /` (two spaces) | **allowed** |
+| `python3 -c "import shutil; shutil.rmtree('/')"` | **allowed** |
+
+Run the loop in a container, a VM, or a throwaway working copy — anywhere you
+would be willing to let an unattended process run `rm`. `verify` and `status`
+make no LLM calls and start no agent, so they are safe to run anywhere.
+
+The Orient phase is the one exception: it runs with `disallowed_tools=["Bash",
+"Write"]` and a hook restricting `Edit` to `.state/`, because a strategist that
+can modify code is a strategist that can break the build between sessions.
+
+### 5. Budget & stuck controls
 
 - **Circuit breaker**: stops after N consecutive sessions with no progress
 - **Budget cap**: `--max-budget` prevents runaway spending
@@ -228,7 +257,7 @@ vocabulary — and knows nothing about the shipped names. See
 
 ```
 evaloop/
-├── run.py              # Verification harness CLI (577 lines)
+├── run.py              # Verification harness CLI (578 lines)
 ├── core.py             # Pure functions: verification, integrity, state (446 lines)
 ├── modes/
 │   └── researcher/     # the shipped loop: hypothesis → experiment → evaluate → learn
@@ -253,20 +282,49 @@ in this repository, so it can be checked rather than taken on trust.
 | Example | Sessions | Outcome | Record |
 |---|---|---|---|
 | `examples/goal-vs-loop` | 4 (Theorizer/Executor ×2) | Sharpe 0.8363 → 1.9084 on synthetic data, target 1.5 met | [`logs/`](examples/goal-vs-loop/logs/), [`.state/history/`](examples/goal-vs-loop/.state/history/), and `session-history.bundle` (`git clone` it to replay all 5 commits) |
-| `examples/qlib-quant`<br>([prerequisites](examples/qlib-quant/PREREQUISITES.md)) | 12, incl. an 11-round sweep | Sharpe 2.9746 → 3.6430 on the 2022 segment of CSI300 | [`.state/history/`](examples/qlib-quant/.state/history/), [`logs/`](examples/qlib-quant/logs/), [`.state/learnings.md`](examples/qlib-quant/.state/learnings.md) |
+| `examples/qlib-quant`<br>([prerequisites](examples/qlib-quant/PREREQUISITES.md)) | 12, incl. an 11-round sweep | Sharpe 2.9746 → 3.6430 on the 2022 segment of CSI300; **−1.1125 → −0.0297 on held-out 2023** | [`.state/history/`](examples/qlib-quant/.state/history/), [`logs/`](examples/qlib-quant/logs/), [`.state/learnings.md`](examples/qlib-quant/.state/learnings.md) |
 
 Both working trees are reset to baseline so the examples start clean; the runs
 above are preserved under `.state/history/` rather than in the live state files.
 
+### The held-out measurement
+
+On 2026-07-30 both qlib configurations were scored against 2023 — the segment no
+tuning round ever saw — with the scoring definition sealed outside the project.
+This is the result the whole harness exists to obtain, and it took until now to
+get: full method, caveats and reproduction steps in
+[`hidden-oos-2026-07-30.md`](examples/qlib-quant/.state/history/hidden-oos-2026-07-30.md).
+
+| Configuration | 2022, selected on | 2023, held out |
+|---|---|---|
+| baseline λ1=205.7 λ2=581.0 | 2.9746 | **−1.1125** |
+| tuned λ1=100.0 λ2=200.0 | 3.6430 | **−0.0297** |
+| change | +0.6684 (+22.5%) | +1.0828 |
+
+Both visible figures reproduce the journal at `e8bf29f` to four decimals, so the
+pipeline is deterministic and the historical record is sound.
+
+**Neither configuration generalizes.** A Sharpe of 3.64 on the segment it was
+selected on corresponds to −0.03 on the following year — a gap of about 3.7
+Sharpe points. **The tuning direction was real, its magnitude was not:** lowering
+λ improved the held-out figure by 1.08, so the sweep was not fitting pure noise,
+but out of sample the model moves from clearly losing to roughly flat rather than
+from good to better. Earlier drafts of this file called the +22.5% a selection
+artifact outright; that was too strong, and the narrower statement is the one the
+data supports.
+
+This is what a held-out metric buys. Eleven rounds of honest, careful work
+produced a number that says nothing about the year that followed, and no amount
+of care on the visible segment would have revealed that.
+
 ### What those numbers do not show
 
 - **The qlib sweep selected on the segment it scored on.** `--split train` maps
-  to the 2022 *valid* segment, and all 11 rounds were chosen by that number. The
-  +22.5% is a selection gain, not an out-of-sample result.
-- **The hidden split was executed once and the result was lost.**
-  [`mlflow-runs.json`](examples/qlib-quant/.state/history/mlflow-runs.json)
-  records a `--split test` run at commit `e8bf29f`, but no `hidden_metrics.json`
-  was ever written. There is no recorded hidden-OOS figure for this example.
+  to the 2022 *valid* segment, and all 11 rounds were chosen by that number.
+  Every Sharpe in the journal is a statement about 2022 alone.
+- **One run, one seed, two annual segments.** The pipeline is deterministic, so
+  the figures repeat exactly, but there is no distribution across seeds, no
+  rolling window, and therefore no confidence interval.
 - **`run_qlib_backtest.py` is not qlib's backtest pipeline.** It implements its
   own top-30/bottom-30 long-short with daily full turnover and no transaction
   cost, slippage, or position limits — despite `hypothesis.md` requiring the

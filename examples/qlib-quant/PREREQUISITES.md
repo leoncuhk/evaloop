@@ -27,5 +27,24 @@ If the run aborts with
 
     module 'lib' has no attribute 'X509_V_FLAG_NOTIFY_POLICY'
 
-that is a pyOpenSSL/cryptography version conflict in your environment, not a
-fault in this example. `pip install -U pyOpenSSL` (24 or newer) resolves it.
+that is an environment problem, not a fault in this example. The chain is:
+
+    run_qlib_backtest.py
+      -> qlib.workflow.task.manage   (imported during the workflow)
+      -> pymongo                     (optional qlib dependency, for task management)
+      -> pymongo.pyopenssl_context
+      -> OpenSSL                     (pyOpenSSL too old for the installed cryptography)
+
+qlib tolerates a *missing* optional dependency — that is why CatBoost is simply
+skipped — because it catches `ModuleNotFoundError`. Here pymongo is present and
+its own import fails with `AttributeError`, which nothing catches.
+
+Resolve it by giving pip a self-consistent set, rather than upgrading pyOpenSSL
+alone, which pulls in a `cryptography` newer than mlflow accepts:
+
+    pip install --user "cryptography<49,>=43" "pyOpenSSL<26"
+
+On Debian and Ubuntu, `pyOpenSSL` in `/usr/lib/python3/dist-packages` is owned by
+the `python3-openssl` apt package. Install into `--user` so the newer copy
+shadows it; do not `pip install -U` over a distro-managed package in the system
+interpreter.

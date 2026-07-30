@@ -15,6 +15,7 @@ whose records are preserved under `.state/history/`:
 | `.state/history/journal-rounds-0-10.json` | The 11-round hyperparameter sweep, one entry per round |
 | `.state/history/progress-rounds-0-10.md` | The session-by-session log for those rounds |
 | `.state/history/mlflow-runs.json` | Distilled MLflow record of the actual backtest executions |
+| `.state/history/hidden-oos-2026-07-30.md` | **The held-out measurement.** Read this before trusting any number below |
 | `logs/session_1.log` | Transcript of the Theorizer session that designed EXP-011 |
 
 **Do not read the peak Sharpe of 3.6430 as the current metric.** It was reached
@@ -32,10 +33,19 @@ on a config that is no longer in the working tree.
 - Net: baseline Sharpe 2.9746 → 3.6430 (+22.5%) by only lowering λ to 100/200.
 - IC and Sharpe are not perfectly aligned: round 1 raised Sharpe while *lowering* IC. Optimize the target (Sharpe).
 - `--split train` evaluates the 2022 valid segment; `--split test` (2023) is hidden from the agent.
+- **The held-out figures are now known, and they change how to read this section.**
+  On 2023: baseline scores **−1.1125**, the λ=100/200 peak scores **−0.0297**.
+  The direction of the tuning transferred (held-out improved by 1.08), the level
+  did not (3.6430 visible ↔ −0.0297 held out). Treat every Sharpe listed above as
+  a statement about the 2022 segment only. See `.state/history/hidden-oos-2026-07-30.md`.
 
 ## Phase transition: model-HP tuning → feature engineering (EXP-011)
 
 - **Model-HP space is exhausted.** All four scalar levers were swept to a single-peaked optimum and the peak has been unbeaten since round 3. Do NOT re-tune lr/max_depth/num_leaves/λ in isolation again — it is a known dead end at Sharpe 3.6430.
+- Now that 2023 is known, re-read the phase transition below with the held-out
+  numbers in hand: the model-HP space is exhausted *for the 2022 metric*, and the
+  peak it reached does not carry to 2023 at all. A feature-engineering round
+  should be judged on the held-out segment, not on another 2022 improvement.
 - The next lever is **feature engineering** (search-space item #1), the largest untouched one and the project's actual goal. The runner reads `dataset.kwargs.handler.class` straight from `qlib_config.yaml`, so the feature set is swappable with a one-line edit; both `Alpha158` and `Alpha360` handlers exist in the installed qlib.
 - Caveat for whoever runs Alpha360: λ=100/200 was tuned for Alpha158's 158 features. Alpha360 has 360 raw features at a different scale, so the same λ may be mis-scaled — an Alpha360 loss is not proof features can't help; re-tune λ on the winning handler before concluding.
 
@@ -48,11 +58,13 @@ that reports a number from it inherits them, so read them before claiming a resu
   `--split train`, which maps to the **2022 valid** segment. Choosing
   hyperparameters by the same segment you score on makes the +22.5% a
   selection gain, not an out-of-sample finding.
-- **`--split test` (2023) was executed once, and the number was not kept.**
-  `.state/history/mlflow-runs.json` records a `--split test` run at commit
-  `e8bf29f` on 2026-06-22, but no `hidden_metrics.json` was ever written, so the
-  Sharpe it printed is lost. The hidden out-of-sample check therefore has **no
-  recorded result** for this example.
+- **The held-out check has now been run and recorded.** For a long time it had
+  not: `.state/history/mlflow-runs.json` shows a `--split test` execution at
+  commit `e8bf29f` whose output was never persisted. On 2026-07-30 both
+  configurations were scored against 2023 with the scoring definition sealed
+  outside the project; results in `.state/history/hidden-oos-2026-07-30.md` and
+  `.state/history/hidden-metrics-2026-07-30.json`. **Both configurations score at
+  or below zero out of sample.**
 - **The backtest is not qlib's pipeline.** Despite `hypothesis.md` requiring
   qlib's standard backtest, `run_qlib_backtest.py` implements its own top-30 /
   bottom-30 long-short with daily full turnover and **no transaction cost, no

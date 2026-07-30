@@ -6,7 +6,7 @@
 
 Evaluation-driven autonomous development: a harness for loops whose acceptance
 criterion is a metric rather than a test suite. Two engines:
-- `run.py` (~577 lines of Python) — subcommand CLI: verify, loop, status, list-modes
+- `run.py` (~578 lines of Python) — subcommand CLI: verify, loop, status, list-modes
 - `core.py` (~446 lines) — pure functions: verification, scoring integrity, state, metrics
 
 ## Architecture
@@ -37,16 +37,20 @@ criterion is a metric rather than a test suite. Two engines:
 1. **Structurally separate evaluation** — verification is architecturally independent from generation
 2. **Hidden out-of-sample** — `hidden_verify_command` output never fed back to LLM,
    and with `--sealed-verify` the agent cannot redefine or reach the command
-2b. **Scoring integrity** — in-project scoring files are fingerprinted around each
+3. **Scoring integrity** — in-project scoring files are fingerprinted around each
    session; a rewritten scorer makes the metric untrusted, never a result
-3. **Stateless sessions** — each LLM call starts fresh, state lives in files
-4. **Deterministic orchestration** — Python decides flow, not LLM
-5. **One task per session** — no multi-task sessions
-6. **State validation** — JSON state validated before write, backed up before overwrite
-7. **Budget cap** — max cost per run prevents runaway spending
-8. **Minimal** — no frameworks, no Docker, no magic
-9. **Evidence is tracked** — session transcripts, archived runs, and learnings are
+4. **Stateless sessions** — each LLM call starts fresh, state lives in files
+5. **Deterministic orchestration** — Python decides flow, not LLM
+6. **One task per session** — no multi-task sessions
+7. **State validation** — the agent writes state directly, so the engine reads it
+   back after each session and reports what is malformed; corrupt JSON is backed
+   up on read. It does not gate the write. `safe_write_state` validates and
+   writes atomically, for callers that write state themselves — the engine loop
+   is not one of them
+8. **Budget cap** — max cost per run prevents runaway spending
+9. **Minimal** — no frameworks, no Docker, no magic
+10. **Evidence is tracked** — session transcripts, archived runs, and learnings are
    version-controlled. Resetting an example to baseline means moving its records
    into `.state/history/`, never deleting them.
-10. **Claims cite files** — anything the README asserts about what was measured
+11. **Claims cite files** — anything the README asserts about what was measured
     must point at a tracked artifact that a reader can open.

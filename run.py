@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-evaloop v7.0.1 — Evaluation-Driven Autonomous Development
+evaloop v7.1.0 — Evaluation-Driven Autonomous Development
 
 For loops whose acceptance criterion is a metric rather than a test suite.
 The orchestrator scores the work, keeps a held-out metric the agent never sees,
@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
-VERSION = "7.0.1"
+VERSION = "7.1.0"
 COMPLETE_SIGNAL = "<promise>COMPLETE</promise>"
 DEFAULT_MODE = "researcher"
 
@@ -358,12 +358,6 @@ async def engine(args):
 
         prev = progress_count(state_path, conf)
 
-        if phase == "work":
-            init_script = project / "init.sh"
-            if init_script.exists():
-                subprocess.run(["bash", str(init_script)], cwd=str(project),
-                               capture_output=True, timeout=60)
-
         # ── Tactical Session ──
         fp_before = scoring_fingerprint(project, conf, sealed)
         print(f"\n{lp}[{ts()}] Session #{session} -- {phase} [{args.mode}]")
@@ -383,7 +377,10 @@ async def engine(args):
             break
 
         # ── Retry on error ──
-        if r["status"] in ("error", "timeout") and not simulate:
+        # A retry is another paid call, so it passes the same gate. Checking only
+        # before the retry let a run finish over its cap.
+        if (r["status"] in ("error", "timeout") and not simulate
+                and total_cost < args.max_budget):
             print(f"{lp}[{ts()}] Session failed ({r['status']}), retrying once...")
             await asyncio.sleep(10)
             r, sim_idx = await _dispatch(False, project, mode_dir, conf,
@@ -392,6 +389,10 @@ async def engine(args):
             print(f"{lp}[{ts()}] Retry: {r['status']} | ${r['cost']:.4f}")
             if r["complete"]:
                 print(f"{lp}[{ts()}] Agent confirmed complete!")
+                break
+            if total_cost >= args.max_budget:
+                print(f"{lp}[{ts()}] Budget cap (${total_cost:.4f} >= "
+                      f"${args.max_budget:.2f}). Stopping.")
                 break
 
         # ── State Validation ──

@@ -1,5 +1,40 @@
 # Changelog
 
+## [7.1.0] — 2026-07-30
+
+The harness produced its first held-out result, and a review pass found three
+places where the code did something the documentation did not admit.
+
+### Added
+- **The held-out measurement.** Both qlib configurations scored against 2023 —
+  the segment no tuning round ever saw — with the scoring definition sealed
+  outside the project. Baseline **−1.1125**, tuned peak **−0.0297**, against
+  2.9746 and 3.6430 on the segment they were selected on. Both visible figures
+  reproduce the journal at `e8bf29f` to four decimals. Method, caveats and
+  reproduction in `examples/qlib-quant/.state/history/hidden-oos-2026-07-30.md`;
+  raw records in `hidden-metrics-2026-07-30.json`
+- **A section on what the loop runs on your machine.** `run.py loop` starts the
+  agent with `bypassPermissions` / `--dangerously-skip-permissions`, which the
+  README had never said. The `PreToolUse` blocklist is a guard against an
+  agent's accident, not a boundary against an adversarial one, and the README now
+  shows measured bypasses of its own list rather than implying it holds
+
+### Removed
+- **The `init.sh` hook.** The orchestrator executed `<project>/init.sh` before
+  every work session — a file inside the directory the agent writes to, outside
+  the scoring fingerprint, documented nowhere and used by no example. A project
+  whose thesis is that the orchestrator must not be controllable by the agent
+  cannot ship a path for the agent to hand it arbitrary code
+
+### Fixed
+- **`--max-budget` could be exceeded by a retry.** The cap was checked before the
+  retry, and the retry's cost was added after. A retry is another paid call, so
+  it now passes the same gate both before and after
+- **A stale claim in CLAUDE.md.** Rule 6 said state was "validated before write,
+  backed up before overwrite". The agent writes state directly; the engine reads
+  it back afterwards and reports what is malformed, and `safe_write_state` is a
+  library entry point the engine loop never calls. The rule now says that
+
 ## [7.0.1] — 2026-07-30
 
 ### Fixed

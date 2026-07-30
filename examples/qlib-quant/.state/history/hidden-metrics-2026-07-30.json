@@ -1,0 +1,14 @@
+[
+  {
+    "session": "manual",
+    "metric": -1.1125,
+    "timestamp": "2026-07-30T11:54:54.384726+00:00",
+    "sealed": true
+  },
+  {
+    "session": "manual",
+    "metric": -0.0297,
+    "timestamp": "2026-07-30T12:10:20.095117+00:00",
+    "sealed": true
+  }
+]
