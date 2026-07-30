@@ -5,9 +5,11 @@ Pure functions for verification, metric parsing, state management, and phase det
 Shared by run.py and usable as a library. No SDK dependency.
 """
 
+import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 from datetime import datetime, timezone
@@ -111,13 +113,23 @@ def progress_count(state_path: Path, conf: dict) -> int:
 
 _SCHEMAS = {
     "engineer": ("tasks", {"pending", "in_progress", "done", "blocked"}),
-    "researcher": ("experiments", {"pending", "planned", "running", "accepted", "rejected", "error"}),
+    # `baseline` and `kept` are here because real runs record them — see
+    # examples/qlib-quant/.state/history/journal-rounds-0-10.json.
+    "researcher": ("experiments", {"pending", "planned", "running", "accepted",
+                                   "rejected", "error", "baseline", "kept"}),
     "auditor": ("findings", {"pending", "in_progress", "verified", "dismissed"}),
 }
 
 
 def validate_state(data: dict, mode: str) -> tuple:
-    """Validate state data against mode schema. Returns (valid, errors)."""
+    """Validate state data against mode schema. Returns (valid, errors).
+
+    Accepts the field names real runs produce, not just the canonical ones:
+    `round` identifies an item as well as `id`, and `decision` carries status as
+    well as `status` — including the `accepted(best)` form. `count_by_status`
+    already reads state that way, and a validator stricter than the reader
+    would reject journals the loop itself is happy to act on.
+    """
     errors = []
     if not isinstance(data, dict):
         return False, ["state must be a dict"]
@@ -134,12 +146,13 @@ def validate_state(data: dict, mode: str) -> tuple:
         if not isinstance(item, dict):
             errors.append(f"{array_key}[{i}]: must be an object")
             continue
-        if "id" not in item:
-            errors.append(f"{array_key}[{i}]: missing 'id'")
-        if "status" not in item:
-            errors.append(f"{array_key}[{i}]: missing 'status'")
-        elif item["status"] not in valid_statuses:
-            errors.append(f"{array_key}[{i}]: invalid status '{item['status']}'")
+        if "id" not in item and "round" not in item:
+            errors.append(f"{array_key}[{i}]: missing 'id' (or 'round')")
+        raw = item.get("status", item.get("decision"))
+        if raw is None:
+            errors.append(f"{array_key}[{i}]: missing 'status' (or 'decision')")
+        elif str(raw).split("(")[0] not in valid_statuses:
+            errors.append(f"{array_key}[{i}]: invalid status '{raw}'")
     return (len(errors) == 0), errors
 
 
@@ -218,32 +231,147 @@ def safe_write_state(state_path: Path, data: dict, mode: str) -> tuple:
 
 # --- Verification harness (Loop 2) ---
 
-def resolve_verify_cmd(project: Path, conf: dict, key: str) -> str:
-    """Resolve verify command: project .verify file overrides mode.conf."""
-    vf = project / ".verify"
-    if vf.exists():
-        for line in vf.read_text().splitlines():
+def _read_kv(path: Path) -> dict:
+    """Parse a `key=value` file, ignoring blanks and # comments."""
+    out = {}
+    if path.exists():
+        for line in path.read_text().splitlines():
             line = line.strip()
             if line and not line.startswith("#") and "=" in line:
                 k, v = line.split("=", 1)
-                if k.strip() == key:
-                    return v.strip()
+                out[k.strip()] = v.strip()
+    return out
+
+
+def resolve_verify_cmd(project: Path, conf: dict, key: str,
+                       sealed: Path = None) -> str:
+    """Resolve a verification command.
+
+    Precedence: a sealed file outside the project > project `.verify` >
+    mode.conf. The sealed file is how an operator keeps the scoring definition
+    beyond the agent's reach: everything under the project directory is
+    writable by the agent, `.verify` included.
+    """
+    if sealed is not None:
+        sealed_conf = _read_kv(Path(sealed))
+        if key in sealed_conf:
+            return sealed_conf[key]
+    local = _read_kv(project / ".verify")
+    if key in local:
+        return local[key]
     return conf.get(key, "")
 
 
+def scoring_fingerprint(project: Path, conf: dict, sealed: Path = None) -> dict:
+    """Hash every in-project input that decides how this project is scored.
+
+    Covers `.verify` and any file inside the project that a verification
+    command invokes. The agent can edit all of these, so the orchestrator
+    fingerprints them before a session and re-checks after: a changed hash
+    means the run rewrote its own scoring, and its metric cannot be trusted.
+    A sealed file lives outside the project and is deliberately not hashed
+    here — the agent cannot reach it.
+    """
+    parts = {}
+    vf = project / ".verify"
+    if vf.is_file():
+        parts[".verify"] = hashlib.sha256(vf.read_bytes()).hexdigest()
+    for key in ("verify_command", "hidden_verify_command"):
+        cmd = resolve_verify_cmd(project, conf, key, sealed)
+        if not cmd:
+            continue
+        try:
+            tokens = shlex.split(cmd)
+        except ValueError:
+            tokens = cmd.split()
+        for tok in tokens:
+            candidate = project / tok
+            if candidate.is_file():
+                rel = tok.lstrip("./")
+                parts[rel] = hashlib.sha256(candidate.read_bytes()).hexdigest()
+    return parts
+
+
+def fingerprint_diff(before: dict, after: dict) -> list:
+    """Names whose scoring fingerprint changed between two points in time."""
+    return sorted(k for k in set(before) | set(after)
+                  if before.get(k) != after.get(k))
+
+
+def _command_core(cmd: str) -> str:
+    """The invocation itself, without shell fallbacks or redirections."""
+    for sep in ("||", "&&", "|", "2>", ">"):
+        cmd = cmd.split(sep)[0]
+    return " ".join(cmd.split())
+
+
+def hidden_leak_signals(log_text: str, hidden_cmd: str = "", metric=None) -> list:
+    """Evidence that a session obtained the hidden metric for itself.
+
+    The orchestrator never reports the hidden metric back, but an agent with
+    shell access can compute it — a live session in examples/goal-vs-loop did
+    exactly that. Two signals:
+
+    - the hidden invocation appears in the transcript
+    - the hidden metric's own value appears in the transcript, which the agent
+      can only know by having run the command
+
+    The value check needs at least four significant digits to fire, because a
+    metric like 0.5 matches ordinary prose. This is a detector, not a barrier:
+    it marks a metric contaminated, it never certifies one clean. Sealing the
+    command outside the project is the control; this catches what leaks anyway.
+    """
+    signals = []
+    if not log_text:
+        return signals
+    haystack = " ".join(log_text.split())
+
+    core = _command_core(hidden_cmd)
+    if core and core in haystack:
+        signals.append(f"ran command: {core}")
+    elif core:
+        tokens = core.split()
+        for i, tok in enumerate(tokens):
+            if tok.endswith((".py", ".sh")):
+                tail = " ".join(tokens[i:])
+                if tail in haystack:
+                    signals.append(f"ran command: {tail}")
+                break
+
+    value = as_number(metric)
+    if value is not None:
+        for text in {f"{value:.4f}".rstrip("0"), repr(value)}:
+            digits = sum(c.isdigit() for c in text)
+            if digits >= 4 and text in haystack:
+                signals.append(f"hidden metric {text} appears in transcript")
+                break
+    return signals
+
+
 def run_verification(project_dir: str, conf: dict, session_label: str = "",
-                     verbose: bool = True) -> dict:
+                     verbose: bool = True, sealed: Path = None,
+                     tampered: list = None, session_log: str = "") -> dict:
     """Run verify_command and hidden_verify_command independently.
 
     This is the core value of the harness: structurally separate evaluation.
-    Returns {verify: result|None, hidden: result|None}.
+
+    `sealed` points at a verification config outside the project directory, so
+    the agent cannot redefine how it is scored. `tampered` carries the names
+    whose scoring fingerprint changed during the session. `session_log` is the
+    transcript to scan for hidden-metric leaks. Every one of these is recorded
+    alongside the metric, because a metric whose provenance is unknown is worse
+    than no metric at all.
+
+    Returns {verify: result|None, hidden: result|None, integrity: {...}}.
     """
     project = Path(project_dir)
-    result = {"verify": None, "hidden": None}
+    tampered = list(tampered or [])
+    result = {"verify": None, "hidden": None,
+              "integrity": {"tampered": tampered, "leaks": [], "trusted": not tampered}}
 
     metric_pattern = conf.get("metric_pattern", "")
 
-    verify_cmd = resolve_verify_cmd(project, conf, "verify_command")
+    verify_cmd = resolve_verify_cmd(project, conf, "verify_command", sealed)
     if verify_cmd:
         vr = run_verify_command(project_dir, verify_cmd, timeout=300,
                                 metric_pattern=metric_pattern)
@@ -253,11 +381,13 @@ def run_verification(project_dir: str, conf: dict, session_label: str = "",
             metric = f" | metric: {vr['metric']}" if vr.get("metric") is not None else ""
             print(f"  verify: {status} (exit {vr['exit_code']}){metric}")
 
-    hidden_cmd = resolve_verify_cmd(project, conf, "hidden_verify_command")
+    hidden_cmd = resolve_verify_cmd(project, conf, "hidden_verify_command", sealed)
     if hidden_cmd:
         hr = run_verify_command(project_dir, hidden_cmd, timeout=300,
                                 metric_pattern=metric_pattern)
         result["hidden"] = hr
+        leaks = hidden_leak_signals(session_log, hidden_cmd, hr.get("metric"))
+        result["integrity"]["leaks"] = leaks
         state_dir = project / ".state"
         state_dir.mkdir(parents=True, exist_ok=True)
         metrics_path = state_dir / "hidden_metrics.json"
@@ -267,11 +397,27 @@ def run_verification(project_dir: str, conf: dict, session_label: str = "",
                 existing = json.loads(metrics_path.read_text())
             except (json.JSONDecodeError, ValueError):
                 existing = []
-        existing.append({"session": session_label, "metric": hr.get("metric"),
-                         "timestamp": datetime.now(timezone.utc).isoformat()})
-        metrics_path.write_text(json.dumps(existing, indent=2) + "\n")
+        record = {"session": session_label, "metric": hr.get("metric"),
+                  "timestamp": datetime.now(timezone.utc).isoformat(),
+                  "sealed": sealed is not None}
+        if tampered:
+            record["tampered"] = tampered
+        if leaks:
+            record["leaks"] = leaks
+        existing.append(record)
+        tmp = metrics_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(existing, indent=2) + "\n")
+        os.replace(str(tmp), str(metrics_path))
         if verbose:
             status = "PASS" if hr["success"] else "FAIL"
             print(f"  hidden: {status} (metric written to .state/hidden_metrics.json)")
+            for leak in leaks:
+                print(f"  CONTAMINATED: {leak}")
+
+    if verbose and tampered:
+        print(f"  TAMPERED: scoring inputs changed during the session: "
+              f"{', '.join(tampered)}")
+        print("  The metric above was produced by definitions this session "
+              "rewrote. Do not treat it as a result.")
 
     return result

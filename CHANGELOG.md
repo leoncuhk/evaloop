@@ -1,5 +1,49 @@
 # Changelog
 
+## [6.2.0] — 2026-07-30
+
+Makes the harness's one distinctive claim enforceable. Everything under the
+project directory is writable by the agent — `.verify` and the scripts it names
+included — so "the orchestrator controls verification" was true only while the
+agent chose not to interfere.
+
+### Added
+- **`--sealed-verify FILE`**: read the verification config from outside the
+  project. It outranks the project's `.verify`, so an agent that rewrites
+  `.verify` changes nothing. A sealed path resolving inside the project is
+  rejected, since that would defeat the point
+- **Scoring fingerprints**: `scoring_fingerprint()` hashes `.verify` and every
+  in-project file the verification commands invoke. The engine fingerprints
+  before each session and re-checks after; a change is reported as `TAMPERED`
+  and the metric is recorded untrusted rather than as a result
+- **Hidden-metric leak detection**: `hidden_leak_signals()` scans a session
+  transcript for the hidden invocation and for the hidden metric's own value.
+  Regression-tested against the real transcripts in this repo — it flags
+  `examples/goal-vs-loop/logs/session_4.log` and leaves `session_2.log` alone
+- **Provenance in `hidden_metrics.json`**: each record now carries `sealed`,
+  plus `tampered` and `leaks` when they apply. A metric whose provenance is
+  unknown is worse than no metric
+- Simulated sessions accept `file_writes` and `transcript`, so agent
+  misbehaviour the integrity checks exist to catch is reproducible without
+  spending a real session
+- 13 integrity tests (75 total)
+- **How This Compares** in the README and a Loop-2 comparison in the design
+  rationale: eval frameworks, agent loop harnesses, evolutionary search — what
+  each is better at, and when not to use this
+
+### Changed
+- **State validation is now wired into the engine.** `validate_state` existed,
+  was tested, and was called by nothing outside the test suite, while the README
+  listed it as an active protection. The engine now reads state back after each
+  session and reports malformed state
+- **The validator accepts what real runs write**: `round` identifies an item as
+  well as `id`, `decision` carries status as well as `status` (including
+  `accepted(best)`), and `baseline`/`kept` are valid outcomes. Checked against
+  the archived journals — the previous schema rejected
+  `journal-rounds-0-10.json`, produced by an actual 12-session run
+- `hidden_metrics.json` is written atomically, matching the state-write rule
+- Size budgets raised to 620/460 lines to fit the integrity layer
+
 ## [6.1.0] — 2026-07-30
 
 ### Fixed

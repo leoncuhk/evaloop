@@ -5,8 +5,8 @@
 ## What This Project Is
 
 A verification harness (Loop 2) for LLM agent loops. Two engines:
-- `run.py` (~485 lines of Python) — subcommand CLI: verify, loop, status, list-modes
-- `core.py` (~277 lines) — pure functions: verification API, state management, metrics
+- `run.py` (~573 lines of Python) — subcommand CLI: verify, loop, status, list-modes
+- `core.py` (~423 lines) — pure functions: verification, scoring integrity, state, metrics
 
 ## Architecture
 
@@ -26,13 +26,16 @@ A verification harness (Loop 2) for LLM agent loops. Two engines:
 - Smoke test: `python3 run.py status examples/todo-app`
 - Verify test: `python3 run.py verify examples/quant-lab --mode researcher`
 - Simulation test: `python3 run.py loop --simulate --mode engineer --pause 0 /tmp/test-project`
-- run.py must stay under 500 lines, core.py under 290 lines
+- run.py must stay under 620 lines, core.py under 460 lines
 - Pure functions go in core.py, not in run.py
 
 ## Key Design Rules
 
 1. **Structurally separate evaluation** — verification is architecturally independent from generation
-2. **Hidden out-of-sample** — `hidden_verify_command` output never fed back to LLM
+2. **Hidden out-of-sample** — `hidden_verify_command` output never fed back to LLM,
+   and with `--sealed-verify` the agent cannot redefine or reach the command
+2b. **Scoring integrity** — in-project scoring files are fingerprinted around each
+   session; a rewritten scorer makes the metric untrusted, never a result
 3. **Stateless sessions** — each LLM call starts fresh, state lives in files
 4. **Deterministic orchestration** — Python decides flow, not LLM
 5. **One task per session** — no multi-task sessions

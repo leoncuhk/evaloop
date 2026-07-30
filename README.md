@@ -4,7 +4,7 @@
 
 Verify your agent's output. Independently. Automatically.
 
-A **verification harness** that wraps around any LLM agent loop. The agent proposes, the harness verifies — with independent commands, hidden out-of-sample data, and structured metric tracking. No frameworks, no Docker, 485 lines of Python.
+A **verification harness** that wraps around any LLM agent loop. The agent proposes, the harness verifies — with independent commands, hidden out-of-sample data, and a scoring definition the agent cannot reach or rewrite. No frameworks, no Docker, under 1000 lines of Python and nothing outside the standard library.
 
 > **Core thesis**: Reliability in autonomous AI agent tasks comes from *structurally separate evaluation* — the evaluator must be architecturally independent from the generator. This is [Loop 2](https://blog.langchain.dev/the-art-of-loop-engineering/) in LangChain's stack, and the [non-negotiable principle](https://appscale.com) for production agent systems.
 
@@ -95,19 +95,45 @@ hidden_verify_command = python qlib_backtest.py --split test
 
 ### 2. Hidden out-of-sample validation
 
-`hidden_verify_command` runs on data the LLM never sees. The metric is written to `.state/hidden_metrics.json` and is **never fed back** to the LLM by the orchestrator.
+`hidden_verify_command` runs on data the LLM never sees. The metric is written to `.state/hidden_metrics.json` and is never fed back to the LLM by the orchestrator.
 
-> **Scope of this guarantee.** The orchestrator does not surface the hidden metric. It does **not** prevent an agent from computing it — the agent has shell access, and the hidden split is one flag away. A live session in [`examples/goal-vs-loop/logs/session_4.log`](examples/goal-vs-loop/logs/session_4.log) did exactly that, transparently reporting `hidden test split = 1.5233` in its own summary. Enforcing the split requires putting the hidden data or the command that reads it outside the agent's reach (separate filesystem permissions, a separate process, or a sandbox boundary). That is not implemented. Until it is, treat any hidden-OOS figure produced inside a session as contaminated.
+Why it matters, empirically: research agents on [MLE-bench](https://arxiv.org/html/2507.02554) show a persistent **9–13% validation/test generalization gap**. An agent optimising a visible metric will find the gap. A number the agent never sees is the only one that measures whether the work generalizes.
+
+### 3. Scoring integrity
+
+Not surfacing a metric is not the same as an agent being unable to obtain it. Everything under the project directory is writable by the agent — including `.verify` and the scripts it names. A live session in [`examples/goal-vs-loop/logs/session_4.log`](examples/goal-vs-loop/logs/session_4.log) ran the hidden split itself and reported `hidden test split = 1.5233` in its own summary.
+
+Three controls, in order of strength:
+
+**Seal the scoring definition** — `--sealed-verify FILE` reads the verification config from a path outside the project. It outranks the project's `.verify`, so an agent that rewrites `.verify` changes nothing. The harness refuses a sealed file that resolves inside the project.
+
+```bash
+# operator-owned, outside the repo the agent works in
+echo 'hidden_verify_command=python3 run_backtest.py --split test' > ~/scoring/proj.conf
+python run.py loop ./proj --mode researcher --sealed-verify ~/scoring/proj.conf
+```
+
+**Fingerprint what does the scoring** — before each session the orchestrator hashes `.verify` and every in-project file the verification commands invoke, then re-hashes afterwards. A change means the session rewrote its own scoring, and the metric is reported as untrusted rather than as a result:
+
+```
+verify: PASS (exit 0) | metric: 99.0
+TAMPERED: scoring inputs changed during the session: score.py
+The metric above was produced by definitions this session rewrote. Do not treat it as a result.
+```
+
+**Detect leaks after the fact** — each session's transcript is scanned for the hidden invocation and for the hidden metric's own value. Hits are recorded with the metric, so a contaminated number is never silently mixed with clean ones:
 
 ```json
 [
-  {"session": "1", "metric": 0.84, "timestamp": "2026-06-22T10:00:00+00:00"},
-  {"session": "3", "metric": 1.37, "timestamp": "2026-06-22T10:15:00+00:00"},
-  {"session": "5", "metric": 1.89, "timestamp": "2026-06-22T10:30:00+00:00"}
+  {"session": "1", "metric": 0.84, "timestamp": "...", "sealed": true},
+  {"session": "3", "metric": 1.5233, "timestamp": "...", "sealed": false,
+   "leaks": ["hidden metric 1.5233 appears in transcript"]}
 ]
 ```
 
-### 3. Budget & stuck controls
+This is the architecture [sandbox-policy research](https://github.com/islo-labs/reward-hack-bench) converges on — scoring runs where the agent does not control it, and the verdict is computed outside the agent's reach. Detection is the weakest of the three and is honest about it: it marks a metric contaminated, it never certifies one clean. For adversarial settings, seal the config *and* run the hidden command against data on a filesystem the agent cannot read.
+
+### 4. Budget & stuck controls
 
 - **Circuit breaker**: stops after N consecutive sessions with no progress
 - **Budget cap**: `--max-budget` prevents runaway spending
@@ -132,15 +158,15 @@ Each session is stateless. State lives in `.state/` files. Session N+1 reads wha
 
 ```
 auto-dev-agentos/
-├── run.py              # Verification harness CLI (485 lines)
-├── core.py             # Pure functions: verification, state, metrics (277 lines)
+├── run.py              # Verification harness CLI (573 lines)
+├── core.py             # Pure functions: verification, integrity, state (423 lines)
 ├── modes/
 │   ├── engineer/       # spec.md → tasks → implement → verify
 │   ├── researcher/     # hypothesis.md → experiment → evaluate → learn
 │   └── auditor/        # standards.md → scan → analyze → report
 ├── tests/
 │   ├── test_run.py     # Unit tests (17 tests)
-│   └── test_integration.py  # Integration tests (45 tests)
+│   └── test_integration.py  # Integration tests (58 tests)
 ├── experiments/        # run_validation.py — orchestrator conformance checks
 ├── docs/               # Design rationale and methodology
 └── examples/           # Demo projects (todo-app, quant-lab, qlib-quant, goal-vs-loop)
@@ -203,7 +229,7 @@ many live runs, measured against a control — has not been done.
 ## CLI Reference
 
 ```
-python run.py verify <project> [--mode MODE]           # verify only
+python run.py verify <project> [--mode MODE] [--sealed-verify FILE]   # verify only
 python run.py loop <project> [--mode MODE] [options]   # session loop
 python run.py status <project> [--mode MODE]           # show phase/progress
 python run.py list-modes                               # list available modes
@@ -215,6 +241,7 @@ python run.py --dry-run <project>                      # backward compat → sta
 |-------------|---------|-------------|
 | `--max-sessions` | `50` | Session limit |
 | `--max-turns` | `50` | Turn limit within one session |
+| `--sealed-verify` | | Scoring config outside the project, beyond the agent's reach |
 | `--max-budget` | `10.0` | Maximum cost in USD |
 | `--orient-interval` | `10` | Strategic review interval |
 | `--review-interval` | `5` | Tactical review every N sessions |
@@ -222,14 +249,26 @@ python run.py --dry-run <project>                      # backward compat → sta
 | `--pause` | `5` | Seconds between sessions |
 | `--simulate` | | Use `.state/sim_script.json` for deterministic testing |
 
-## Industry Context
+## How This Compares
 
-This project implements the **structurally separate evaluator** pattern, validated across multiple frameworks:
+Three families of tools sit near this one. They solve adjacent problems, and for most of what people need, one of them is the better answer.
 
-- **LangChain** [4-loop stack](https://blog.langchain.dev/the-art-of-loop-engineering/): Agent Loop → Verification Loop → Application Loop → Hill Climbing Loop. This project is Loop 2.
-- **Lanham** L1/L2/L3: Inner (tool-calling) → Task (multi-step goal) → Meta (orchestration). This project operates at L2/L3 boundary.
-- **AppScale** [3 stages](https://appscale.com): Prompt Engineering → Loop Engineering → Orchestrated Teams. Non-negotiable for Stage 2: evaluator must be architecturally separate from generator.
-- **Osmani** [Loop Engineering](https://addyosmani.com/blog/loop-engineering): "Reliability comes from the loop, not the model." The loop is the verification layer.
+**LLM evaluation frameworks** — [DeepEval](https://deepeval.com), [Inspect AI](https://inspect.aisi.org.uk) (UK AISI), [promptfoo](https://promptfoo.dev), [Braintrust](https://braintrust.dev), LangSmith. They score outputs against datasets, with rich metric libraries, LLM-as-judge, CI integration, and red-teaming. **Use them for**: measuring whether a change to a prompt, model, or RAG pipeline made things better. **What they don't do**: wrap a long-running loop in which the agent keeps editing the artifact being scored. Their threat model is a flaky metric, not an agent with write access to the scorer.
+
+**Agent loop harnesses** — [loop-harness](https://github.com/lSAAGl/loop-harness), spec-driven toolkits like [Spec Kit](https://github.com/github/spec-kit), agentic SDLC pipelines. Closest structural siblings: scheduled loops, worktree isolation, a verification gate before anything ships. Their gate is usually a second LLM session judging the first. **Use them for**: shipping agent work safely into a repo. **What they don't do**: hold data back from the agent. An LLM judge is a strong check on *whether the work is sound* and a weak one on *whether the number generalizes*.
+
+**Evolutionary program search** — [AlphaEvolve](https://deepmind.google), [OpenEvolve](https://github.com/codelion/openevolve), [ShinkaEvolve](https://github.com/SakanaAI/ShinkaEvolve). Here the evaluator genuinely is a separate program, with cascade evaluation to prune cheap failures early — architecturally the nearest relative. The community's own guidance is that you must hand-design an unhackable evaluator, because the search will find every loophole in it. **Use them for**: optimising a well-specified objective over many thousands of candidates. **What they don't do**: give you the unhackable evaluator. That is left to you.
+
+**Where this project fits.** It is the small piece those three leave out: a scoring definition the agent cannot reach or rewrite, carried across sessions, with the out-of-sample number withheld by construction rather than by instruction. It is roughly 1000 lines with no dependencies, so it wraps whatever agent you already run instead of replacing it.
+
+**When not to use it.** If your metric is a fixed test suite the agent cannot edit, `verify_command` adds little over running the tests. If you need dashboards, tracing, or dataset management, use a real eval platform. If you need hard isolation against an adversarial agent, you need a sandbox — this gives you sealing and detection, not containment.
+
+### The framing this follows
+
+- **LangChain** [4-loop stack](https://blog.langchain.dev/the-art-of-loop-engineering/): Agent → Verification → Application → Hill Climbing. This project is Loop 2.
+- **Osmani** [Loop Engineering](https://addyosmani.com/blog/loop-engineering): "Reliability comes from the loop, not the model."
+- **MLE-bench** [research agents](https://arxiv.org/html/2507.02554): a 9–13% validation/test generalization gap — the empirical case for withholding a metric.
+- **RewardHackBench** [sandbox policies](https://github.com/islo-labs/reward-hack-bench): scoring belongs in an environment the agent does not control.
 
 ## Design Principles
 
@@ -244,7 +283,10 @@ These address the [six failure modes](https://arxiv.org/abs/2601.03315) of auton
 | One task per session | Implementation drift — no room to simplify under pressure |
 | Circuit breaker | Infinite loops — stuck detection + max sessions + budget cap |
 | Deterministic orchestration | All six — code decides flow, not LLM |
-| State schema validation | Corruption — rejects invalid state, auto-backups |
+| State schema validation | Corruption — malformed state is reported, not acted on |
+| Sealed scoring config | Evaluator capture — the agent cannot redefine its own metric |
+| Scoring fingerprints | Reward hacking — a rewritten scorer marks the metric untrusted |
+| Leak detection | Silent contamination — hidden-metric leaks are recorded with the metric |
 
 ## Prerequisites
 

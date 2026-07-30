@@ -13,9 +13,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from core import (
-    count_by_status, get_phase, load_conf, parse_metric, progress_count,
-    resolve_verify_cmd, run_verification, run_verify_command,
-    safe_read_state, safe_write_state, validate_state,
+    count_by_status, fingerprint_diff, get_phase, hidden_leak_signals,
+    load_conf, parse_metric, progress_count, resolve_verify_cmd,
+    run_verification, run_verify_command, safe_read_state, safe_write_state,
+    scoring_fingerprint, validate_state,
 )
 
 SCRIPT_DIR = Path(__file__).parent.parent
@@ -743,6 +744,136 @@ def test_verify_exit_code_fail():
         result = run_verification(tmp, conf, verbose=False)
         assert result["verify"]["success"] is False
         assert result["verify"]["exit_code"] == 1
+
+
+# ═══════════════════════════════════════════
+# Group 7: Scoring integrity
+#
+# The harness's one distinctive claim is that evaluation is separate from
+# generation. These prove the separation is enforced, not merely intended.
+# ═══════════════════════════════════════════
+
+def _scored_project(tmp, verify_body='verify_command=python3 score.py\n'):
+    project = Path(tmp) / "proj"
+    (project / ".state").mkdir(parents=True)
+    (project / "score.py").write_text('print("[Metric] Sharpe Ratio: 0.5000")\n')
+    (project / ".verify").write_text(verify_body)
+    return project
+
+
+def test_fingerprint_covers_verify_file_and_its_scripts():
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _scored_project(tmp)
+        fp = scoring_fingerprint(project, {})
+        assert ".verify" in fp
+        assert "score.py" in fp
+
+
+def test_fingerprint_detects_rewritten_scoring_script():
+    """An agent that edits its own scorer must not go unnoticed."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _scored_project(tmp)
+        before = scoring_fingerprint(project, {})
+        (project / "score.py").write_text('print("[Metric] Sharpe Ratio: 99.0")\n')
+        assert fingerprint_diff(before, scoring_fingerprint(project, {})) == ["score.py"]
+
+
+def test_fingerprint_stable_when_only_unrelated_files_change():
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _scored_project(tmp)
+        before = scoring_fingerprint(project, {})
+        (project / "notes.md").write_text("scratch work\n")
+        assert fingerprint_diff(before, scoring_fingerprint(project, {})) == []
+
+
+def test_sealed_config_outranks_the_project_verify_file():
+    """.verify sits inside the agent's reach; a sealed file does not."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _scored_project(
+            tmp, 'hidden_verify_command=echo "[Metric] X: 999.0"\n')
+        sealed = Path(tmp) / "sealed.conf"
+        sealed.write_text("hidden_verify_command=python3 score.py --split test\n")
+        assert resolve_verify_cmd(project, {}, "hidden_verify_command") \
+            == 'echo "[Metric] X: 999.0"'
+        assert resolve_verify_cmd(project, {}, "hidden_verify_command", sealed) \
+            == "python3 score.py --split test"
+
+
+def test_sealed_config_falls_back_for_keys_it_does_not_define():
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _scored_project(tmp)
+        sealed = Path(tmp) / "sealed.conf"
+        sealed.write_text("hidden_verify_command=python3 score.py --split test\n")
+        assert resolve_verify_cmd(project, {}, "verify_command", sealed) \
+            == "python3 score.py"
+
+
+def test_leak_detected_when_hidden_metric_value_is_quoted():
+    """The real failure: examples/goal-vs-loop/logs/session_4.log."""
+    log = ("Robustness check (diagnostic only): train split = 1.7697, "
+           "hidden test split = 1.5233. Both clear 1.5.")
+    signals = hidden_leak_signals(log, "python3 run_backtest.py --split test", 1.5233)
+    assert any("1.5233" in s for s in signals)
+
+
+def test_leak_detected_when_hidden_command_is_echoed():
+    log = "I ran python3 run_backtest.py --split test to sanity-check."
+    signals = hidden_leak_signals(log, "python3 run_backtest.py --split test", None)
+    assert any("ran command" in s for s in signals)
+
+
+def test_no_leak_signal_from_a_clean_transcript():
+    log = "Edited strategies.py, ran the visible backtest, Sharpe 1.3477. Committed."
+    assert hidden_leak_signals(log, "python3 run_backtest.py --split test", 1.5233) == []
+
+
+def test_low_precision_metric_does_not_trigger_a_false_leak():
+    """0.5 appears in ordinary prose; only distinctive values may fire."""
+    assert hidden_leak_signals("the ratio was 0.5 overall", "", 0.5) == []
+
+
+def test_real_session_log_is_flagged_and_a_clean_one_is_not():
+    """Regression anchored on the transcripts committed in this repo."""
+    logs = SCRIPT_DIR / "examples" / "goal-vs-loop" / "logs"
+    cmd = "python3 run_backtest.py --split test"
+    assert hidden_leak_signals((logs / "session_4.log").read_text(), cmd, 1.5233)
+    assert hidden_leak_signals((logs / "session_2.log").read_text(), cmd, 1.5233) == []
+
+
+def test_run_verification_reports_untrusted_when_scoring_was_rewritten():
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _scored_project(tmp)
+        result = run_verification(str(project), {}, verbose=False,
+                                  tampered=["score.py"])
+        assert result["integrity"]["trusted"] is False
+        assert result["integrity"]["tampered"] == ["score.py"]
+
+
+def test_run_verification_records_provenance_in_hidden_metrics():
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _scored_project(
+            tmp, "verify_command=python3 score.py\n"
+                 'hidden_verify_command=echo "[Metric] Sharpe Ratio: 1.5233"\n')
+        run_verification(str(project), {}, session_label="7", verbose=False,
+                         tampered=["score.py"],
+                         session_log="hidden test split = 1.5233")
+        record = json.loads((project / ".state" / "hidden_metrics.json").read_text())[-1]
+        assert record["session"] == "7"
+        assert record["metric"] == 1.5233
+        assert record["sealed"] is False
+        assert record["tampered"] == ["score.py"]
+        assert record["leaks"]
+
+
+def test_clean_run_records_no_integrity_flags():
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _scored_project(
+            tmp, 'hidden_verify_command=echo "[Metric] Sharpe Ratio: 1.5233"\n')
+        result = run_verification(str(project), {}, session_label="1", verbose=False,
+                                  session_log="Did the work, committed.")
+        assert result["integrity"]["trusted"] is True
+        record = json.loads((project / ".state" / "hidden_metrics.json").read_text())[-1]
+        assert "tampered" not in record and "leaks" not in record
 
 
 # ═══════════════════════════════════════════

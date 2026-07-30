@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-auto-dev-agentos v6.1 — Verification Harness for LLM Agent Loops
+auto-dev-agentos v6.2 — Verification Harness for LLM Agent Loops
 
 Structurally separate evaluator (Loop 2) that wraps around any agent loop.
 Independent verification, hidden out-of-sample validation, budget/stuck controls.
@@ -9,6 +9,11 @@ Usage:
   python run.py verify <project-dir> [--mode MODE]      # verify only, no LLM
   python run.py loop <project-dir> [--mode MODE]         # session loop + verify
   python run.py status <project-dir>                     # show phase/progress
+
+Scoring integrity: --sealed-verify FILE keeps the scoring definition outside the
+project, so an agent that rewrites .verify changes nothing. In-project scoring
+files are fingerprinted around each session, and transcripts are scanned for
+hidden-metric leaks.
 """
 
 import asyncio
@@ -19,10 +24,14 @@ from datetime import datetime
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
-VERSION = "6.1"
+VERSION = "6.2"
 COMPLETE_SIGNAL = "<promise>COMPLETE</promise>"
 
-from core import load_conf, get_phase, progress_count, run_verification
+from core import (
+    load_conf, get_phase, progress_count, run_verification,
+    resolve_verify_cmd, safe_read_state, scoring_fingerprint,
+    fingerprint_diff, validate_state,
+)
 
 _sdk_available = False
 try:
@@ -170,13 +179,21 @@ async def run_simulated_session(
             data[k] = v
         state_file.write_text(json.dumps(data, indent=2) + "\n")
 
+    # A simulated session may also rewrite project files, so that misbehaviour
+    # the integrity checks exist to catch — an agent editing its own scoring —
+    # is reproducible without spending a real session on it.
+    for rel, content in entry.get("file_writes", {}).items():
+        target = project / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content)
+
     result["complete"] = entry.get("complete", False)
     result["cost"] = entry.get("cost", 0.0)
     result["status"] = entry.get("status", "success")
     log_dir = project / "logs"
     log_dir.mkdir(exist_ok=True)
     (log_dir / f"session_{label}.log").write_text(
-        f"[SIMULATE] phase={phase} entry={json.dumps(entry)}")
+        entry.get("transcript", f"[SIMULATE] phase={phase} entry={json.dumps(entry)}"))
     return result
 
 
@@ -226,6 +243,25 @@ def ts() -> str:
     return datetime.now().strftime("%H:%M:%S")
 
 
+def _is_inside(path: Path, parent: Path) -> bool:
+    """True if path sits under parent — i.e. within the agent's reach."""
+    try:
+        path.resolve().relative_to(parent.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _read_session_log(project: Path, session: int) -> str:
+    """Read back what the session said, for hidden-metric leak detection."""
+    text = []
+    for name in (f"session_{session}.log", f"session_{session}_retry.log"):
+        log = project / "logs" / name
+        if log.is_file():
+            text.append(log.read_text(errors="replace"))
+    return "\n".join(text)
+
+
 async def _dispatch(sim, proj, mdir, conf, phase, label, turns, sscript, sidx):
     """Route to simulated, SDK, or CLI session."""
     if sim:
@@ -270,6 +306,15 @@ async def engine(args):
             dst.write_text(template)
             print(f"  Refreshed CLAUDE.md from modes/{args.mode} template")
 
+    sealed = Path(args.sealed_verify).resolve() if getattr(args, "sealed_verify", None) else None
+    if sealed and not sealed.is_file():
+        sys.exit(f"Sealed verification file not found: {sealed}")
+    if sealed and _is_inside(sealed, project):
+        sys.exit(f"Sealed verification file must live outside the project "
+                 f"the agent can write to: {sealed}")
+    if sealed:
+        print(f"  Sealed scoring config: {sealed}")
+
     state_path = project / ".state" / conf.get("state_file", "tasks.json")
     sim_script, sim_idx = [], 0
     if simulate:
@@ -283,6 +328,7 @@ async def engine(args):
     print(f"  Project: {project}\n")
 
     session, sessions_run, no_progress, total_cost = 0, 0, 0, 0.0
+    untrusted = 0
 
     while True:
         session += 1
@@ -317,6 +363,7 @@ async def engine(args):
                                capture_output=True, timeout=60)
 
         # ── Tactical Session ──
+        fp_before = scoring_fingerprint(project, conf, sealed)
         print(f"\n{lp}[{ts()}] Session #{session} -- {phase} [{args.mode}]")
         r, sim_idx = await _dispatch(simulate, project, mode_dir, conf,
                                      phase, str(session), args.max_turns, sim_script, sim_idx)
@@ -345,12 +392,30 @@ async def engine(args):
                 print(f"{lp}[{ts()}] Agent confirmed complete!")
                 break
 
+        # ── State Validation ──
+        # The LLM writes state directly; the orchestrator reads it back and
+        # says so when it is malformed, rather than acting on nonsense.
+        data, read_err = safe_read_state(state_path)
+        if read_err and state_path.exists():
+            print(f"{lp}[{ts()}] WARNING: unreadable state — {read_err}")
+        elif data is not None:
+            state_ok, state_errs = validate_state(data, args.mode)
+            if not state_ok:
+                print(f"{lp}[{ts()}] WARNING: invalid state after session "
+                      f"#{session}: {'; '.join(state_errs[:3])}")
+
         # ── Orchestrator Verification ──
         if phase == "work":
-            vr = run_verification(str(project), conf, session_label=str(session))
+            tampered = fingerprint_diff(fp_before,
+                                        scoring_fingerprint(project, conf, sealed))
+            vr = run_verification(
+                str(project), conf, session_label=str(session), sealed=sealed,
+                tampered=tampered, session_log=_read_session_log(project, session))
             if vr["verify"] and not vr["verify"]["success"]:
                 print(f"{lp}[{ts()}] WARNING: Verification failed "
                       f"(exit {vr['verify']['exit_code']})")
+            if not vr["integrity"]["trusted"]:
+                untrusted += 1
 
         # ── Circuit Breaker ──
         if phase == "work" and r["status"] not in ("error", "timeout"):
@@ -375,6 +440,9 @@ async def engine(args):
         await asyncio.sleep(args.pause)
 
     print(f"\n{lp}[{ts()}] Done. {args.mode} | {sessions_run} sessions | ${total_cost:.4f}")
+    if untrusted:
+        print(f"{lp}[{ts()}] {untrusted} session(s) rewrote their own scoring inputs. "
+              f"Those metrics are not results.")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -391,13 +459,19 @@ def cmd_verify(args):
     project = Path(args.project_dir).resolve()
     if not project.is_dir():
         sys.exit(f"Project directory not found: {project}")
+    sealed = Path(args.sealed_verify).resolve() if getattr(args, "sealed_verify", None) else None
+    if sealed and not sealed.is_file():
+        sys.exit(f"Sealed verification file not found: {sealed}")
+    if sealed and _is_inside(sealed, project):
+        sys.exit(f"Sealed verification file must live outside the project: {sealed}")
     print(f"  auto-dev-agentos v{VERSION} verify | {args.mode}\n  Project: {project}\n")
-    result = run_verification(str(project), conf, session_label="manual")
+    result = run_verification(str(project), conf, session_label="manual",
+                              sealed=sealed)
     if not result["verify"] and not result["hidden"]:
         print("  No verify_command or hidden_verify_command configured.")
         print(f"  Check modes/{args.mode}/mode.conf or {project}/.verify")
         return
-    ok = all(r["success"] for r in result.values() if r)
+    ok = all(r["success"] for k, r in result.items() if r and k != "integrity")
     sys.exit(0 if ok else 1)
 
 
@@ -445,8 +519,13 @@ def main():
         description=f"auto-dev-agentos v{VERSION} — Verification Harness")
     sub = top.add_subparsers(dest="command")
 
+    def _sealed(p):
+        p.add_argument("--sealed-verify", metavar="FILE",
+                       help="Verification config outside the project, so the "
+                            "agent cannot redefine how it is scored")
+
     p_v = sub.add_parser("verify", help="Run verification only (no LLM)")
-    p_v.add_argument("project_dir"); _mode(p_v)
+    p_v.add_argument("project_dir"); _mode(p_v); _sealed(p_v)
 
     p_s = sub.add_parser("status", help="Show phase and progress")
     p_s.add_argument("project_dir"); _mode(p_s)
@@ -454,7 +533,7 @@ def main():
     sub.add_parser("list-modes", help="List available modes")
 
     p_l = sub.add_parser("loop", help="Run session loop with verification")
-    p_l.add_argument("project_dir"); _mode(p_l)
+    p_l.add_argument("project_dir"); _mode(p_l); _sealed(p_l)
     for flag, tp, dfl in [("--max-sessions", int, 50), ("--max-turns", int, 50),
                            ("--max-budget", float, 10.0), ("--review-interval", int, 5),
                            ("--orient-interval", int, 10), ("--no-progress-max", int, 3),

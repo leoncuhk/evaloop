@@ -2,6 +2,13 @@
 
 Why auto-dev-agentos is designed the way it is — and what alternatives were considered.
 
+> **A note on what changed.** Most of this document argues against *orchestration*
+> frameworks, because until v6.0 this project competed with them. v6.0 narrowed the
+> claim to a verification harness — Loop 2 — which puts it beside a different set of
+> tools. The orchestration argument below is still the reason the loop is shaped the
+> way it is, and it is preserved. The Loop-2 comparison is new, and it is the one
+> that matters when deciding whether to use this.
+
 ## The Problem
 
 Long-running LLM agent tasks fail predictably. A [2026 study](https://arxiv.org/abs/2601.03315) documented six recurring failure modes: context degradation, implementation drift, overexcitement, training data bias, insufficient domain knowledge, and weak scientific taste. Three of four autonomous research attempts in the study failed.
@@ -78,6 +85,82 @@ Complexity ───────────────────────
 ```
 
 auto-dev-agentos occupies the space between "powerful but unreliable single session" and "complex multi-agent orchestration." Minimum viable reliability for long-running autonomous tasks.
+
+## The Loop-2 Comparison
+
+Once the claim is "verification harness," the neighbours change. Three families:
+
+### LLM evaluation frameworks
+
+[DeepEval](https://deepeval.com), [Inspect AI](https://inspect.aisi.org.uk) (UK AISI),
+[promptfoo](https://promptfoo.dev), [Braintrust](https://braintrust.dev), LangSmith.
+Large metric libraries, LLM-as-judge, dataset management, CI integration, and in
+promptfoo's case a mature red-teaming CLI. These are more capable than this project at
+what they do, and anyone measuring prompt or RAG changes should use one.
+
+**The gap they leave**: their subject is a *system under test* that someone else edits
+between runs. They assume the scorer and the thing scored are separated by process and
+by person. In an autonomous loop that assumption breaks — the agent edits the artifact,
+the tests, and the config, in the same directory, between every measurement. None of
+these frameworks defends the scoring definition from the thing being scored, because
+they were never asked to.
+
+### Agent loop harnesses
+
+[loop-harness](https://github.com/lSAAGl/loop-harness) is the closest structural
+sibling: bash, no framework, scheduled loops, git worktree isolation, and a second
+`claude -p` session that must print `VERDICT: PASS` before anything ships. Spec-driven
+toolkits ([Spec Kit](https://github.com/github/spec-kit) and its descendants) put
+validation gates between phases.
+
+**The gap they leave**: the gate is an LLM judging another LLM's work, on data both can
+see. That is a good check on whether the work is *sound* and a weak one on whether a
+number *generalizes*. A judge cannot tell you a strategy is overfit if it only ever sees
+the fit.
+
+### Evolutionary program search
+
+[AlphaEvolve](https://deepmind.google), [OpenEvolve](https://github.com/codelion/openevolve),
+[ShinkaEvolve](https://github.com/SakanaAI/ShinkaEvolve). The nearest relative
+architecturally: the evaluator is a separate program, cascade evaluation prunes weak
+candidates cheaply, and the search runs for thousands of iterations. ShinkaEvolve
+reports no significant overfitting to its public test cases.
+
+**The gap they leave**: the community's own guidance is that you must hand-design an
+unhackable evaluator, because the search will find every loophole. That is stated as a
+prerequisite, not provided as a feature. This project is an attempt at the missing
+piece — a scoring definition that stays out of the search's reach.
+
+### Why hold data back at all
+
+The empirical case is not speculative. Research agents on
+[MLE-bench](https://arxiv.org/html/2507.02554) show a persistent **9–13%
+validation/test generalization gap**: an agent optimising a proxy metric reliably
+converges somewhere the held-out set does not follow. Instructing an LLM to tune
+hyperparameters without a withheld set produces severe overfitting. A metric the agent
+never sees is the only measurement that survives its own optimiser.
+
+### Why sealing rather than sandboxing
+
+[RewardHackBench](https://github.com/islo-labs/reward-hack-bench) measures whether
+execution-environment policies stop agents cheating on evaluations, and finds static
+gatekeeping brittle — content filters miss encodings, blocklists miss mirrors. The
+architecture that holds is structural: scoring runs in an environment the agent does not
+control, and the verdict is computed outside every sandbox.
+
+Full sandboxing would mean Docker, which this project rejects for the reasons above. The
+compromise it makes instead:
+
+1. **Seal** the scoring definition outside the project (`--sealed-verify`) — structural,
+   and the strongest control here.
+2. **Fingerprint** in-project scoring files around each session — catches an agent that
+   rewrites its own scorer, and marks the metric untrusted.
+3. **Detect** hidden-metric leaks in transcripts — the weakest, and labelled as such. It
+   marks a metric contaminated; it never certifies one clean.
+
+This is deliberately less than containment. An agent that reads the hidden dataset
+directly defeats all three. Sealing plus filesystem permissions on the held-out data is
+the configuration to use when that matters.
 
 ## References
 

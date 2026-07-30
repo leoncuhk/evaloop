@@ -1,3 +1,8 @@
 # Project-level verification commands (overrides mode.conf)
 verify_command=python3 run_qlib_backtest.py --split train
 hidden_verify_command=python3 run_qlib_backtest.py --split test
+
+# NOTE: this file sits inside the directory the agent writes to, so the agent
+# can edit it. For a run whose hidden metric has to mean something, move the
+# hidden command into a file outside the project and pass it with
+# --sealed-verify; it takes precedence over everything here.
