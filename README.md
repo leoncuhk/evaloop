@@ -159,14 +159,14 @@ Each session is stateless. State lives in `.state/` files. Session N+1 reads wha
 ```
 auto-dev-agentos/
 ├── run.py              # Verification harness CLI (573 lines)
-├── core.py             # Pure functions: verification, integrity, state (423 lines)
+├── core.py             # Pure functions: verification, integrity, state (429 lines)
 ├── modes/
 │   ├── engineer/       # spec.md → tasks → implement → verify
 │   ├── researcher/     # hypothesis.md → experiment → evaluate → learn
 │   └── auditor/        # standards.md → scan → analyze → report
 ├── tests/
 │   ├── test_run.py     # Unit tests (17 tests)
-│   └── test_integration.py  # Integration tests (58 tests)
+│   └── test_integration.py  # Integration tests (60 tests)
 ├── experiments/        # run_validation.py — orchestrator conformance checks
 ├── docs/               # Design rationale and methodology
 └── examples/           # Demo projects (todo-app, quant-lab, qlib-quant, goal-vs-loop)
@@ -242,6 +242,10 @@ python run.py --dry-run <project>                      # backward compat → sta
 | `--max-sessions` | `50` | Session limit |
 | `--max-turns` | `50` | Turn limit within one session |
 | `--sealed-verify` | | Scoring config outside the project, beyond the agent's reach |
+
+`verify_timeout` (seconds, default 300) is set in `mode.conf`, `.verify`, or the
+sealed file — a full model fit outlives a test suite. A timeout is a failed
+check, never a metric.
 | `--max-budget` | `10.0` | Maximum cost in USD |
 | `--orient-interval` | `10` | Strategic review interval |
 | `--review-interval` | `5` | Tactical review every N sessions |

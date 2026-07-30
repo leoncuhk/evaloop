@@ -369,7 +369,8 @@ def test_verify_command_timeout():
     with tempfile.TemporaryDirectory() as tmp:
         result = run_verify_command(tmp, "sleep 10", timeout=1)
         assert not result["success"]
-        assert result["stderr"] == "timeout"
+        assert result["stderr"].startswith("timeout")
+        assert result["metric"] is None, "a timeout is a failure, not a metric"
 
 
 def test_hidden_verify_not_in_state():
@@ -874,6 +875,24 @@ def test_clean_run_records_no_integrity_flags():
         assert result["integrity"]["trusted"] is True
         record = json.loads((project / ".state" / "hidden_metrics.json").read_text())[-1]
         assert "tampered" not in record and "leaks" not in record
+
+
+def test_verify_timeout_is_configurable():
+    """A full model fit outlives the default. mode.conf and .verify can say so."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _scored_project(tmp, "verify_command=sleep 5\nverify_timeout=1\n")
+        result = run_verification(str(project), {}, verbose=False)
+        assert result["verify"]["success"] is False
+        assert "timeout after 1s" in result["verify"]["stderr"]
+
+
+def test_verify_timeout_default_applies_when_unset():
+    with tempfile.TemporaryDirectory() as tmp:
+        project = _scored_project(tmp)
+        result = run_verification(str(project), {}, verbose=False)
+        assert result["verify"]["success"] is True
+        assert result["verify"]["metric"] == 0.5
+
 
 
 # ═══════════════════════════════════════════

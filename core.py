@@ -191,7 +191,8 @@ def run_verify_command(project_dir: str, command: str, timeout: int = 60,
             "metric": parse_metric(result.stdout, metric_pattern),
         }
     except subprocess.TimeoutExpired:
-        return {"success": False, "exit_code": -1, "stdout": "", "stderr": "timeout", "metric": None}
+        return {"success": False, "exit_code": -1, "stdout": "",
+                "stderr": f"timeout after {timeout}s", "metric": None}
     except Exception as e:
         return {"success": False, "exit_code": -1, "stdout": "", "stderr": str(e), "metric": None}
 
@@ -366,6 +367,11 @@ def run_verification(project_dir: str, conf: dict, session_label: str = "",
     """
     project = Path(project_dir)
     tampered = list(tampered or [])
+    # Real verification can be a full model fit. The default suits a test suite;
+    # anything heavier sets verify_timeout in mode.conf, .verify, or the sealed
+    # file. A timeout is a failed check, not a metric of zero.
+    timeout = int(as_number(resolve_verify_cmd(
+        project, conf, "verify_timeout", sealed)) or 300)
     result = {"verify": None, "hidden": None,
               "integrity": {"tampered": tampered, "leaks": [], "trusted": not tampered}}
 
@@ -373,7 +379,7 @@ def run_verification(project_dir: str, conf: dict, session_label: str = "",
 
     verify_cmd = resolve_verify_cmd(project, conf, "verify_command", sealed)
     if verify_cmd:
-        vr = run_verify_command(project_dir, verify_cmd, timeout=300,
+        vr = run_verify_command(project_dir, verify_cmd, timeout=timeout,
                                 metric_pattern=metric_pattern)
         result["verify"] = vr
         if verbose:
@@ -383,7 +389,7 @@ def run_verification(project_dir: str, conf: dict, session_label: str = "",
 
     hidden_cmd = resolve_verify_cmd(project, conf, "hidden_verify_command", sealed)
     if hidden_cmd:
-        hr = run_verify_command(project_dir, hidden_cmd, timeout=300,
+        hr = run_verify_command(project_dir, hidden_cmd, timeout=timeout,
                                 metric_pattern=metric_pattern)
         result["hidden"] = hr
         leaks = hidden_leak_signals(session_log, hidden_cmd, hr.get("metric"))

@@ -122,6 +122,7 @@ if __name__ == "__main__":
     try:
         run(args.split)
     except Exception as e:
-        print(f"[Metric] Sharpe Ratio: 0.0000")
+        # Deliberately no [Metric] line: a crash is a failed verification, and
+        # printing 0.0000 would enter the journal as a real measurement.
         print(f"[Error] {e}", file=sys.stderr)
         sys.exit(1)

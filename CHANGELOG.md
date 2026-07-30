@@ -26,7 +26,10 @@ agent chose not to interfere.
 - Simulated sessions accept `file_writes` and `transcript`, so agent
   misbehaviour the integrity checks exist to catch is reproducible without
   spending a real session
-- 13 integrity tests (75 total)
+- **`verify_timeout`** (seconds, default 300) in `mode.conf`, `.verify`, or the
+  sealed file. The qlib example takes 6m41s to score and was being killed at
+  300s; a timeout now reports how long it waited, and never yields a metric
+- 15 integrity and timeout tests (77 total)
 - **How This Compares** in the README and a Loop-2 comparison in the design
   rationale: eval frameworks, agent loop harnesses, evolutionary search — what
   each is better at, and when not to use this
@@ -43,6 +46,9 @@ agent chose not to interfere.
   `journal-rounds-0-10.json`, produced by an actual 12-session run
 - `hidden_metrics.json` is written atomically, matching the state-write rule
 - Size budgets raised to 620/460 lines to fit the integrity layer
+- `examples/qlib-quant/run_qlib_backtest.py` no longer prints
+  `[Metric] Sharpe Ratio: 0.0000` when the run crashes. A fabricated zero was
+  entering `hidden_metrics.json` as though it were a measurement
 
 ## [6.1.0] — 2026-07-30
 

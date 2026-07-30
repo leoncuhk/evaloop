@@ -6,7 +6,7 @@
 
 A verification harness (Loop 2) for LLM agent loops. Two engines:
 - `run.py` (~573 lines of Python) — subcommand CLI: verify, loop, status, list-modes
-- `core.py` (~423 lines) — pure functions: verification, scoring integrity, state, metrics
+- `core.py` (~429 lines) — pure functions: verification, scoring integrity, state, metrics
 
 ## Architecture
 
