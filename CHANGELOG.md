@@ -1,5 +1,27 @@
 # Changelog
 
+## [7.0.1] — 2026-07-30
+
+### Fixed
+- **`metric_pattern` ignored the project and the sealed file.** The commands
+  resolved through `.verify` and `--sealed-verify`; the label they print did not,
+  so a project could override `verify_command` but not the pattern used to read
+  its output — and silently got no metric. It now follows the same precedence
+- **A pattern that matches nothing is now reported.** When `metric_pattern` is
+  set and the output does contain `[Metric]` lines but none match, the run warns
+  instead of recording no metric in silence. Copying a mode without changing its
+  label was otherwise a quiet failure. The parser still never guesses: falling
+  back to a different `[Metric]` line is the defect that once made a losing
+  Sharpe read as a positive return
+
+### Changed
+- The architecture diagram's caption now states the limit of the crossed-out
+  arrow: evaloop never carries the held-out metric back and seals the scoring
+  definition, but it cannot make the held-out data unreadable. That is
+  filesystem permissions or a sandbox
+- GitHub topics replaced. `agentos` was a leftover of the old name and
+  `autonomous-coding` named the case the README explicitly sends elsewhere
+
 ## [7.0.0] — 2026-07-30
 
 Renamed to **evaloop**, and cut to one thing.

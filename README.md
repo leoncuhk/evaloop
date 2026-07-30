@@ -189,7 +189,14 @@ This is the architecture [sandbox-policy research](https://github.com/islo-labs/
 
 ## Architecture
 
-![evaloop architecture: the orchestrator runs the project and reads its metric; the sealed config and held-out data reach the orchestrator only, and the path from held-out data into the project is blocked](assets/evaloop-architecture.png)
+![evaloop architecture: the orchestrator runs the project and reads its metric; the sealed config and held-out data reach the orchestrator only, and the path from held-out data into the project is crossed out](assets/evaloop-architecture.png)
+
+*What the crossed-out arrow means: evaloop never carries the held-out metric back
+into the project, and `--sealed-verify` puts the definition of how to score
+beyond the agent's reach. It does not make the held-out **data** unreadable — if
+that file sits somewhere the agent can open, the agent can open it. Closing that
+last path is filesystem permissions or a sandbox, not this tool. The crossed-out
+arrow is a guarantee about what evaloop does, and an intent about the rest.*
 
 The agent works inside the project directory and can write anything in it — its
 own code, its own state, its own scorer. The orchestrator sits outside. It reads
@@ -222,12 +229,12 @@ vocabulary — and knows nothing about the shipped names. See
 ```
 evaloop/
 ├── run.py              # Verification harness CLI (577 lines)
-├── core.py             # Pure functions: verification, integrity, state (433 lines)
+├── core.py             # Pure functions: verification, integrity, state (446 lines)
 ├── modes/
 │   └── researcher/     # the shipped loop: hypothesis → experiment → evaluate → learn
 ├── tests/
 │   ├── test_run.py     # Unit tests (17 tests)
-│   └── test_integration.py  # Integration tests (64 tests)
+│   └── test_integration.py  # Integration tests (66 tests)
 ├── docs/               # Design rationale and methodology
 └── examples/           # quant-lab, qlib-quant, goal-vs-loop, tamper-demo
     └── <project>/

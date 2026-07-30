@@ -7,7 +7,7 @@
 Evaluation-driven autonomous development: a harness for loops whose acceptance
 criterion is a metric rather than a test suite. Two engines:
 - `run.py` (~577 lines of Python) — subcommand CLI: verify, loop, status, list-modes
-- `core.py` (~433 lines) — pure functions: verification, scoring integrity, state, metrics
+- `core.py` (~446 lines) — pure functions: verification, scoring integrity, state, metrics
 
 ## Architecture
 

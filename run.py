@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-evaloop v7.0 — Evaluation-Driven Autonomous Development
+evaloop v7.0.1 — Evaluation-Driven Autonomous Development
 
 For loops whose acceptance criterion is a metric rather than a test suite.
 The orchestrator scores the work, keeps a held-out metric the agent never sees,
@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
-VERSION = "7.0"
+VERSION = "7.0.1"
 COMPLETE_SIGNAL = "<promise>COMPLETE</promise>"
 DEFAULT_MODE = "researcher"
 

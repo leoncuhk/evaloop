@@ -379,13 +379,25 @@ def run_verification(project_dir: str, conf: dict, session_label: str = "",
     result = {"verify": None, "hidden": None,
               "integrity": {"tampered": tampered, "leaks": [], "trusted": not tampered}}
 
-    metric_pattern = conf.get("metric_pattern", "")
+    # Same precedence as the commands themselves: a project that overrides
+    # verify_command must be able to override the label it prints, and a sealed
+    # file must be able to fix both beyond the agent's reach.
+    metric_pattern = resolve_verify_cmd(project, conf, "metric_pattern", sealed)
+
+    def _warn_unmatched(label, result):
+        """A pattern that matches nothing, against output that has metrics, is a
+        misconfiguration — most often a mode copied without changing its label."""
+        if (verbose and metric_pattern and result.get("metric") is None
+                and "[Metric]" in (result.get("stdout") or "")):
+            print(f"  WARNING: {label} printed a [Metric] line, but none matched "
+                  f"metric_pattern {metric_pattern!r}. No metric recorded.")
 
     verify_cmd = resolve_verify_cmd(project, conf, "verify_command", sealed)
     if verify_cmd:
         vr = run_verify_command(project_dir, verify_cmd, timeout=timeout,
                                 metric_pattern=metric_pattern)
         result["verify"] = vr
+        _warn_unmatched("verify_command", vr)
         if verbose:
             status = "PASS" if vr["success"] else "FAIL"
             metric = f" | metric: {vr['metric']}" if vr.get("metric") is not None else ""
@@ -396,6 +408,7 @@ def run_verification(project_dir: str, conf: dict, session_label: str = "",
         hr = run_verify_command(project_dir, hidden_cmd, timeout=timeout,
                                 metric_pattern=metric_pattern)
         result["hidden"] = hr
+        _warn_unmatched("hidden_verify_command", hr)
         leaks = hidden_leak_signals(session_log, hidden_cmd, hr.get("metric"))
         result["integrity"]["leaks"] = leaks
         state_dir = project / ".state"

@@ -966,6 +966,48 @@ def test_shipped_mode_scores_a_project_that_has_one():
         assert result["verify"]["metric"] == 1.2345
 
 
+def test_metric_pattern_follows_the_same_precedence_as_the_commands():
+    """A project that overrides verify_command must be able to override the
+    label it prints, and a sealed file must be able to fix both."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp) / "proj"
+        project.mkdir()
+        (project / "score.sh").write_text('#!/bin/sh\necho "[Metric] Accuracy: 0.91"\n')
+        (project / "score.sh").chmod(0o755)
+        mode_conf = {"verify_command": "./score.sh",
+                     "metric_pattern": "[Metric] Sharpe Ratio:"}
+
+        # mode.conf alone: the label does not match, so there is no metric
+        assert run_verification(str(project), mode_conf, verbose=False)["verify"]["metric"] is None
+
+        # the project's own .verify overrides it
+        (project / ".verify").write_text("metric_pattern=[Metric] Accuracy:\n")
+        assert run_verification(str(project), mode_conf, verbose=False)["verify"]["metric"] == 0.91
+
+        # a sealed file outranks the project's
+        (project / ".verify").write_text("metric_pattern=[Metric] Nonsense:\n")
+        sealed = Path(tmp) / "sealed.conf"
+        sealed.write_text("metric_pattern=[Metric] Accuracy:\n")
+        assert run_verification(str(project), mode_conf, verbose=False,
+                                sealed=sealed)["verify"]["metric"] == 0.91
+
+
+def test_unmatched_metric_pattern_leaves_no_metric():
+    """Silently falling back to a different [Metric] line is the defect class
+    that made a losing Sharpe read as a positive return. Never guess."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp) / "proj"
+        project.mkdir()
+        (project / "score.sh").write_text(
+            '#!/bin/sh\necho "[Metric] Accuracy: 0.91"\necho "[Metric] Loss: 0.02"\n')
+        (project / "score.sh").chmod(0o755)
+        result = run_verification(str(project), {"verify_command": "./score.sh",
+                                                 "metric_pattern": "[Metric] Absent:"},
+                                  verbose=False)
+        assert result["verify"]["success"] is True
+        assert result["verify"]["metric"] is None
+
+
 # ═══════════════════════════════════════════
 # Runner
 # ═══════════════════════════════════════════
