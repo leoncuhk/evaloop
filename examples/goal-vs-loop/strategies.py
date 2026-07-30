@@ -6,8 +6,9 @@ def dual_ma_crossover(data, fast=10, slow=20):
     """Baseline: Sharpe ~0.84"""
     fast_ma = data["close"].rolling(window=fast).mean()
     slow_ma = data["close"].rolling(window=slow).mean()
-    spread = (fast_ma - slow_ma) / slow_ma
-    signals = (spread * 25).clip(lower=0.0, upper=1.0).fillna(0.0)
+    signals = pd.Series(0.0, index=data.index)
+    signals[fast_ma > slow_ma] = 1.0
+    signals[fast_ma <= slow_ma] = -0.5
     return signals
 
 # Active strategy (the loop modifies this)
