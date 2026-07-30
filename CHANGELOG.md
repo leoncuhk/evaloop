@@ -30,6 +30,9 @@ agent chose not to interfere.
   sealed file. The qlib example takes 6m41s to score and was being killed at
   300s; a timeout now reports how long it waited, and never yields a metric
 - 15 integrity and timeout tests (77 total)
+- CI enforces the size budget CLAUDE.md declares, and runs the simulated loop
+  plus an end-to-end tamper-detection gate. A stated constraint nothing checks
+  is the same class of problem as a documented protection nothing wires in
 - **How This Compares** in the README and a Loop-2 comparison in the design
   rationale: eval frameworks, agent loop harnesses, evolutionary search — what
   each is better at, and when not to use this

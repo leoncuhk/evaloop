@@ -15,6 +15,22 @@ jobs:
         run: |
           python3 -c "import ast; ast.parse(open('run.py').read())"
           python3 -c "import ast; ast.parse(open('core.py').read())"
+      # CLAUDE.md states a size budget. A stated constraint nothing checks is
+      # the same class of problem as a documented protection nothing wires in.
+      - name: Size budget
+        run: |
+          python3 - <<'EOF'
+          import sys
+          budgets = {"run.py": 620, "core.py": 460}
+          over = []
+          for name, limit in budgets.items():
+              n = sum(1 for _ in open(name))
+              print(f"{name}: {n}/{limit}")
+              if n > limit:
+                  over.append(f"{name} is {n} lines, budget {limit}")
+          if over:
+              sys.exit("Size budget exceeded: " + "; ".join(over))
+          EOF
 
   test:
     runs-on: ubuntu-latest
@@ -39,3 +55,27 @@ jobs:
       - uses: actions/checkout@v4
       - run: python3 run.py list-modes
       - run: python3 run.py status examples/todo-app
+      # End-to-end through the engine, including the integrity checks, at no cost.
+      - name: Simulated loop
+        run: |
+          mkdir -p /tmp/sim/.state
+          echo "spec" > /tmp/sim/spec.md
+          cat > /tmp/sim/.state/sim_script.json <<'EOF'
+          [{"state_changes": {"tasks": [{"id": "T1", "status": "pending"}]}, "cost": 0.01},
+           {"state_changes": {"tasks": [{"id": "T1", "status": "done"}]}, "cost": 0.01}]
+          EOF
+          python3 run.py loop --simulate --mode engineer --pause 0 --max-sessions 5 /tmp/sim
+      - name: Tamper detection fires end to end
+        run: |
+          mkdir -p /tmp/tamper/.state
+          echo "spec" > /tmp/tamper/spec.md
+          echo 'print("[Metric] Score: 0.5")' > /tmp/tamper/score.py
+          echo 'verify_command=python3 score.py' > /tmp/tamper/.verify
+          cat > /tmp/tamper/.state/sim_script.json <<'EOF'
+          [{"state_changes": {"tasks": [{"id": "T1", "status": "pending"}]}, "cost": 0.01},
+           {"state_changes": {"tasks": [{"id": "T1", "status": "done"}]}, "cost": 0.01,
+            "file_writes": {"score.py": "print(\"[Metric] Score: 99.0\")\n"}}]
+          EOF
+          python3 run.py loop --simulate --mode engineer --pause 0 --max-sessions 5 /tmp/tamper \
+            | tee /tmp/tamper.out
+          grep -q "TAMPERED" /tmp/tamper.out
