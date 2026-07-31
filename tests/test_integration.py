@@ -17,6 +17,7 @@ from core import (
     load_conf, parse_metric, progress_count, resolve_verify_cmd,
     run_verification, run_verify_command, safe_read_state, safe_write_state,
     scoring_fingerprint, validate_state, divergence_report,
+    hidden_metrics_path,
 )
 
 SCRIPT_DIR = Path(__file__).parent.parent
@@ -1016,7 +1017,8 @@ def test_unmatched_metric_pattern_leaves_no_metric():
 # ═══════════════════════════════════════════
 
 def _lab(tmp, best, target, hidden=None):
-    state = Path(tmp) / ".state"
+    """A project whose held-out record sits in the unsealed default location."""
+    state = Path(tmp) / "proj" / ".state"
     state.mkdir(parents=True, exist_ok=True)
     (state / "journal.json").write_text(json.dumps(
         {"experiments": [], "best_metric": best, "target_metric": target}))
@@ -1092,6 +1094,35 @@ def test_divergence_report_survives_a_project_with_no_state():
     with tempfile.TemporaryDirectory() as tmp:
         r = divergence_report(Path(tmp) / ".state" / "journal.json", {})
         assert r["gate_open"] is True and r["visible"] is None
+
+
+def test_sealing_moves_the_held_out_record_out_of_the_project():
+    """Through 7.2 this file was written to <project>/.state/, the directory
+    every mode instructs the agent to read first. The control benchmark found
+    it on its first cell, from a session that was not even trying to cheat."""
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp) / "proj"
+        sealed = Path(tmp) / "operator" / "task.conf"
+        sealed.parent.mkdir(parents=True)
+        unsealed_path = hidden_metrics_path(project, None)
+        sealed_path = hidden_metrics_path(project, sealed)
+        assert project in unsealed_path.parents, "unsealed still lands in the project"
+        assert project not in sealed_path.parents, "sealed must not land in the project"
+        assert sealed.parent in sealed_path.parents
+
+
+def test_a_sealed_run_writes_nothing_readable_into_the_project():
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp) / "proj"
+        (project / ".state").mkdir(parents=True)
+        (project / "hid.py").write_text('print("[Metric] Sharpe Ratio: -0.99")\n')
+        sealed = Path(tmp) / "operator" / "task.conf"
+        sealed.parent.mkdir(parents=True)
+        sealed.write_text("hidden_verify_command=python3 hid.py\n")
+        run_verification(str(project), {}, verbose=False, sealed=sealed)
+        inside = [p.name for p in (project / ".state").rglob("*") if p.is_file()]
+        assert "hidden_metrics.json" not in inside, inside
+        assert hidden_metrics_path(project, sealed).is_file()
 
 
 # ═══════════════════════════════════════════

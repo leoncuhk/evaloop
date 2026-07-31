@@ -29,6 +29,47 @@ VALID_START, VALID_END = "2022-01-01", "2022-12-31"
 TEST_START, TEST_END = "2023-01-01", "2023-12-31"
 
 
+def score(model, dataset, seg, topk=30):
+    """Score a fitted model on one segment. IC and a top-k long-short Sharpe.
+
+    Factored out so the rolling study in run_rolling.py measures with exactly
+    this code. Two implementations of one metric is how two answers to one
+    question happen.
+    """
+    import numpy as np
+    import pandas as pd
+
+    pred = model.predict(dataset, segment=seg)
+    if isinstance(pred, pd.Series):
+        pred = pred.to_frame("score")
+    else:
+        pred.columns = ["score"]
+    label = dataset.prepare(seg, col_set="label")
+    if isinstance(label, pd.DataFrame):
+        label = label.iloc[:, 0]
+
+    common = pred.index.intersection(label.index)
+    pred_aligned = pred.loc[common, "score"]
+    label_aligned = label.loc[common]
+
+    ic_series = pred_aligned.groupby("datetime").corr(label_aligned)
+    ic_mean = float(ic_series.mean()) if len(ic_series) > 0 else 0.0
+
+    daily = []
+    for dt, group in pred_aligned.groupby("datetime"):
+        top = group.nlargest(topk).index.get_level_values("instrument")
+        bottom = group.nsmallest(topk).index.get_level_values("instrument")
+        day = label_aligned.xs(dt, level="datetime")
+        daily.append(float(day.reindex(top).mean() - day.reindex(bottom).mean()))
+
+    daily = np.array(daily)
+    if len(daily) > 5 and daily.std() > 0:
+        return {"sharpe": float(np.sqrt(252) * daily.mean() / daily.std()),
+                "ann_return": float(daily.mean() * 252), "ic": ic_mean,
+                "days": len(daily)}
+    return {"sharpe": 0.0, "ann_return": 0.0, "ic": ic_mean, "days": len(daily)}
+
+
 def run(split="all"):
     import qlib
     import numpy as np
@@ -57,42 +98,9 @@ def run(split="all"):
     else:
         seg = "test"
 
-    pred = model.predict(dataset, segment=seg)
-    if isinstance(pred, pd.Series):
-        pred = pred.to_frame("score")
-    else:
-        pred.columns = ["score"]
-
-    label = dataset.prepare(seg, col_set="label")
-    if isinstance(label, pd.DataFrame):
-        label = label.iloc[:, 0]
-
-    # Align prediction and label
-    common = pred.index.intersection(label.index)
-    pred_aligned = pred.loc[common, "score"]
-    label_aligned = label.loc[common]
-
-    # Daily IC (rank correlation between prediction and next-day return)
-    ic_series = pred_aligned.groupby("datetime").corr(label_aligned)
-    ic_mean = float(ic_series.mean()) if len(ic_series) > 0 else 0.0
-
-    # Top-k long / bottom-k short portfolio return simulation
     topk = config.get("strategy", {}).get("topk", 30)
-    daily_returns = []
-    for dt, group in pred_aligned.groupby("datetime"):
-        top = group.nlargest(topk).index.get_level_values("instrument")
-        bottom = group.nsmallest(topk).index.get_level_values("instrument")
-        day_label = label_aligned.xs(dt, level="datetime")
-        top_ret = day_label.reindex(top).mean() if len(top) > 0 else 0
-        bot_ret = day_label.reindex(bottom).mean() if len(bottom) > 0 else 0
-        daily_returns.append(float(top_ret - bot_ret))
-
-    daily_returns = np.array(daily_returns)
-    if len(daily_returns) > 5 and daily_returns.std() > 0:
-        sharpe = float(np.sqrt(252) * daily_returns.mean() / daily_returns.std())
-        ann_return = float(daily_returns.mean() * 252)
-    else:
-        sharpe = ann_return = 0.0
+    m = score(model, dataset, seg, topk)
+    sharpe, ann_return, ic_mean = m["sharpe"], m["ann_return"], m["ic"]
 
     print(f"[Metric] Sharpe Ratio: {sharpe:.4f}")
     print(f"[Metric] Annualized Return: {ann_return:.4f}")

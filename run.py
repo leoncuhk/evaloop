@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-evaloop v7.2.0 — Evaluation-Driven Autonomous Development
+evaloop v7.3.0 — Evaluation-Driven Autonomous Development
 
 For loops whose acceptance criterion is a metric rather than a test suite.
 The orchestrator scores the work, keeps a held-out metric the agent never sees,
@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
-VERSION = "7.2.0"
+VERSION = "7.3.0"
 COMPLETE_SIGNAL = "<promise>COMPLETE</promise>"
 DEFAULT_MODE = "researcher"
 
@@ -365,7 +365,7 @@ async def engine(args):
             print(f"{lp}[{ts()}] Max sessions ({args.max_sessions}). Stopping.")
             break
 
-        phase = get_phase(state_path, conf)
+        phase = get_phase(state_path, conf, sealed)
         if phase == "done":
             print(f"{lp}[{ts()}] All work complete!")
             break
@@ -374,7 +374,7 @@ async def engine(args):
         # Observe and Orient are arithmetic on two series and run every round.
         # Decide is a judgement call and stays with the strategist, which is now
         # handed the conclusion rather than left to infer it from raw state.
-        orient = divergence_report(state_path, conf)
+        orient = divergence_report(state_path, conf, sealed)
         if orient["target"] is not None:
             print(f"{lp}[{ts()}] Orient: {orient['verdict']}")
         if session > 1 and session % args.orient_interval == 0:
@@ -385,7 +385,7 @@ async def engine(args):
             total_cost += r["cost"]
             if r["status"] != "skipped":
                 print(f"{lp}[{ts()}] Orient: {r['status']} | ${r['cost']:.4f}")
-            phase = get_phase(state_path, conf)
+            phase = get_phase(state_path, conf, sealed)
             if phase == "done":
                 print(f"{lp}[{ts()}] Orient determined: complete!")
                 break
@@ -521,9 +521,10 @@ def cmd_status(args):
         sys.exit(f"Mode '{args.mode}' not found.")
     conf = load_conf(mode_dir)
     project = Path(args.project_dir).resolve()
+    sealed = Path(args.sealed_verify).resolve() if getattr(args, "sealed_verify", None) else None
     state_path = project / ".state" / conf.get("state_file", "tasks.json")
     entry = conf.get("entry_file", "spec.md")
-    phase = get_phase(state_path, conf)
+    phase = get_phase(state_path, conf, sealed)
     done = progress_count(state_path, conf)
     prompt_name = conf.get(PHASE_KEYS.get(phase, ""), phase)
     prompt_file = mode_dir / "prompts" / f"{prompt_name}.md"
@@ -567,7 +568,7 @@ def main():
     p_v.add_argument("project_dir"); _mode(p_v); _sealed(p_v)
 
     p_s = sub.add_parser("status", help="Show phase and progress")
-    p_s.add_argument("project_dir"); _mode(p_s)
+    p_s.add_argument("project_dir"); _mode(p_s); _sealed(p_s)
 
     sub.add_parser("list-modes", help="List available modes")
 

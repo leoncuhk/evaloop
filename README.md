@@ -153,7 +153,7 @@ Not surfacing a metric is not the same as an agent being unable to obtain it. Ev
 
 Three controls, in order of strength:
 
-**Seal the scoring definition** — `--sealed-verify FILE` reads the verification config from a path outside the project. It outranks the project's `.verify`, so an agent that rewrites `.verify` changes nothing. The harness refuses a sealed file that resolves inside the project.
+**Seal the scoring definition** — `--sealed-verify FILE` reads the verification config from a path outside the project. It outranks the project's `.verify`, so an agent that rewrites `.verify` changes nothing. The harness refuses a sealed file that resolves inside the project. **The held-out record is written beside it**, in the operator's own space — through 7.2 it went to `<project>/.state/hidden_metrics.json`, the directory every mode instructs the agent to read first, which made "never fed back" untrue by one `cat`. Without a sealed config there is nowhere else to put it, and the run says so.
 
 ```bash
 # operator-owned, outside the repo the agent works in
@@ -312,13 +312,13 @@ vocabulary — and knows nothing about the shipped names. See
 
 ```
 evaloop/
-├── run.py              # Verification harness CLI (612 lines)
-├── core.py             # Pure functions: verification, integrity, state (548 lines)
+├── run.py              # Verification harness CLI (613 lines)
+├── core.py             # Pure functions: verification, integrity, state (575 lines)
 ├── modes/
 │   └── researcher/     # the shipped loop: hypothesis → experiment → evaluate → learn
 ├── tests/
 │   ├── test_run.py     # Unit tests (17 tests)
-│   └── test_integration.py  # Integration tests (74 tests)
+│   └── test_integration.py  # Integration tests (76 tests)
 ├── docs/               # Design rationale and methodology
 └── examples/           # quant-lab, qlib-quant, goal-vs-loop, tamper-demo
     └── <project>/

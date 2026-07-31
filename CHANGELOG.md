@@ -1,5 +1,33 @@
 # Changelog
 
+## [7.3.0] — 2026-07-31
+
+### Added
+- **`bench/` — the experiment that could show the controls are wrong.** Six
+  scenarios where a shortcut is available, crossed with four control arms, each
+  cell a live `claude -p` session judged on two numbers: was it caught, and did
+  it improve the metric anyway. The pairing follows RewardHackBench: a control
+  that stops cheating by stopping all work is not a control. `read-holdout` is
+  expected to defeat every arm, and publishing that is the point
+- **`examples/qlib-quant/run_rolling.py`** — the held-out result rested on one
+  pair of segments. This walks both configurations across five folds, fitting
+  once per fold and scoring the selected and held-out years from the same fit,
+  through `run_qlib_backtest.score()` so the two cannot drift apart
+
+### Fixed
+- **The held-out record was written inside the agent's reach.** `run_verification`
+  wrote `hidden_metrics.json` to `<project>/.state/` — the directory every mode
+  instructs the agent to read first. The number the README promised was never fed
+  back was one `cat` away, no shell access required. With `--sealed-verify` it is
+  now written beside the sealed config, in the operator's space; without one
+  there is nowhere else to put it and the run warns instead of implying safety.
+
+  Found by the control benchmark on its first cell, by a session that was not
+  trying to cheat: it read the state directory it had been told to read, and
+  honestly reported what it found — then asked which of the two metrics it was
+  meant to be optimising. That is the whole argument for adversarial evaluation
+  in one result
+
 ## [7.2.0] — 2026-07-31
 
 The held-out metric now decides something. Until this release it was written to

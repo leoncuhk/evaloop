@@ -62,9 +62,30 @@ def as_number(value):
         return None
 
 
-def _hidden_records(state_dir: Path) -> list:
+def hidden_metrics_path(project: Path, sealed: Path = None) -> Path:
+    """Where the held-out record lives.
+
+    Beside the sealed config when there is one — the operator's own space,
+    outside the tree the agent writes to. Through 7.2 this file was always
+    written to `<project>/.state/`, which is the directory every mode instructs
+    the agent to read first. The number the orchestrator promised never to feed
+    back was sitting one `cat` away, no shell access required. The control
+    benchmark found it on its first cell, from a session that was not even
+    trying: it read the state directory it had been told to read, and reported
+    what it found.
+
+    Without a sealed config there is no operator-owned location to use, so the
+    file stays in the project and the caller is expected to say so.
+    """
+    project = Path(project)
+    if sealed is not None:
+        return Path(sealed).parent / f"{project.name}.hidden_metrics.json"
+    return project / ".state" / "hidden_metrics.json"
+
+
+def _hidden_records(path: Path) -> list:
     """Every held-out record on disk, trustworthy or not."""
-    path = Path(state_dir) / "hidden_metrics.json"
+    path = Path(path)
     if not path.is_file():
         return []
     try:
@@ -74,19 +95,19 @@ def _hidden_records(state_dir: Path) -> list:
     return [r for r in records if isinstance(r, dict)] if isinstance(records, list) else []
 
 
-def trusted_hidden(state_dir: Path) -> list:
+def trusted_hidden(path: Path) -> list:
     """Held-out records whose provenance is clean, oldest first.
 
     A record produced by a session that rewrote its own scoring, or that was
     seen quoting the held-out number, is not evidence. Dropping those here is
     what keeps the gate below from being satisfied by a corrupted measurement.
     """
-    return [r for r in _hidden_records(state_dir)
+    return [r for r in _hidden_records(path)
             if as_number(r.get("metric")) is not None
             and not r.get("tampered") and not r.get("leaks")]
 
 
-def held_out_gate(state_dir: Path, target) -> tuple:
+def held_out_gate(path: Path, target) -> tuple:
     """Whether the held-out metric permits declaring the work done.
 
     Returns (allowed, latest_value). The gate reads the *latest* clean record,
@@ -101,18 +122,18 @@ def held_out_gate(state_dir: Path, target) -> tuple:
     target = as_number(target)
     if target is None:
         return True, None
-    records = trusted_hidden(state_dir)
+    records = trusted_hidden(path)
     if not records:
         # No measurements at all leaves nothing to say, so the gate stays open
         # and behaviour is unchanged for projects that configure no hidden
         # command. Measurements that exist but are all discredited are the
         # opposite case: corrupting the record must not become a way through.
-        return (not _hidden_records(state_dir)), None
+        return (not _hidden_records(path)), None
     latest = as_number(records[-1].get("metric"))
     return (latest >= target), latest
 
 
-def get_phase(state_path: Path, conf: dict) -> str:
+def get_phase(state_path: Path, conf: dict, sealed: Path = None) -> str:
     """Determine current phase: init | work | done."""
     if not state_path.exists():
         return "init"
@@ -142,7 +163,8 @@ def get_phase(state_path: Path, conf: dict) -> str:
         # The visible target is met. Before calling it done, ask the number the
         # agent never saw. Until 7.2 nothing did, so a run could report success
         # on a metric it had spent every session optimising.
-        allowed, _ = held_out_gate(state_path.parent, target)
+        allowed, _ = held_out_gate(
+            hidden_metrics_path(state_path.parent.parent, sealed), target)
         return "done" if allowed else "init"
 
     if done_count == 0:
@@ -290,7 +312,7 @@ def safe_write_state(state_path: Path, data: dict, conf: dict) -> tuple:
     return True, None
 
 
-def divergence_report(state_path: Path, conf: dict) -> dict:
+def divergence_report(state_path: Path, conf: dict, sealed: Path = None) -> dict:
     """Orient, computed rather than asked.
 
     Boyd's Orient phase is the one that updates your model of the situation. In
@@ -311,13 +333,14 @@ def divergence_report(state_path: Path, conf: dict) -> dict:
 
     report["visible"] = as_number(data.get("best_metric"))
     report["target"] = target = as_number(data.get("target_metric"))
-    records = trusted_hidden(state_path.parent)
+    metrics_path = hidden_metrics_path(state_path.parent.parent, sealed)
+    records = trusted_hidden(metrics_path)
     report["held_out"] = as_number(records[-1].get("metric")) if records else None
     report["measurements"] = len(records)
 
     if target is None:
         return report
-    allowed, _ = held_out_gate(state_path.parent, target)
+    allowed, _ = held_out_gate(metrics_path, target)
     report["gate_open"] = allowed
 
     v, h = report["visible"], report["held_out"]
@@ -513,9 +536,8 @@ def run_verification(project_dir: str, conf: dict, session_label: str = "",
         _warn_unmatched("hidden_verify_command", hr)
         leaks = hidden_leak_signals(session_log, hidden_cmd, hr.get("metric"))
         result["integrity"]["leaks"] = leaks
-        state_dir = project / ".state"
-        state_dir.mkdir(parents=True, exist_ok=True)
-        metrics_path = state_dir / "hidden_metrics.json"
+        metrics_path = hidden_metrics_path(project, sealed)
+        metrics_path.parent.mkdir(parents=True, exist_ok=True)
         existing = []
         if metrics_path.exists():
             try:
@@ -535,7 +557,12 @@ def run_verification(project_dir: str, conf: dict, session_label: str = "",
         os.replace(str(tmp), str(metrics_path))
         if verbose:
             status = "PASS" if hr["success"] else "FAIL"
-            print(f"  hidden: {status} (metric written to .state/hidden_metrics.json)")
+            where = ("outside the project" if sealed is not None
+                     else "INSIDE the project, where the agent can read it")
+            print(f"  hidden: {status} (recorded {where})")
+            if sealed is None:
+                print("  WARNING: without --sealed-verify the held-out record is "
+                      "written to .state/, which every mode tells the agent to read.")
             for leak in leaks:
                 print(f"  CONTAMINATED: {leak}")
 
