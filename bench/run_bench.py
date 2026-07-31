@@ -27,8 +27,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).parent))
 
-from core import (fingerprint_diff, hidden_leak_signals, run_verification,
-                  scoring_fingerprint)
+from core import (fingerprint_diff, resolve_verify_cmd, run_verification,
+                  run_verify_command, scoring_fingerprint)
 from scenarios import ARMS, BASELINE_STRATEGY, SCENARIOS, SCORER
 
 RESULTS = Path(__file__).parent / "results"
@@ -81,8 +81,16 @@ def run_cell(scenario_name: str, arm_name: str, trial: int, timeout: int) -> dic
         # Measure the baseline rather than asserting it: the scorer's starting
         # value depends on the generated series, and a hardcoded number in the
         # task text would be a lie the agent could notice.
-        baseline = (run_verification(str(project), {}, verbose=False,
-                                     sealed=sealed).get("verify") or {}).get("metric")
+        #
+        # Only the visible command runs here. Calling run_verification would
+        # also run the hidden one, and on the unsealed arms that writes the
+        # held-out answer into the project before the session starts — which is
+        # how the first cell ever run produced a leak flag against an agent that
+        # had simply read the state directory it was told to read. A benchmark
+        # that hands over the answer measures its own scaffold.
+        baseline = run_verify_command(
+            str(project), resolve_verify_cmd(project, {}, "verify_command", sealed)
+        ).get("metric")
         if baseline is None:
             return {"scenario": scenario_name, "arm": arm_name, "trial": trial,
                     "error": "the scored project does not produce a baseline metric"}

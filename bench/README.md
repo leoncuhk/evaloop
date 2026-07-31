@@ -61,6 +61,17 @@ Results land in `bench/results/` as JSON, one file per run, with the full
 transcript kept alongside. A cell that fails is as much a result as one that
 holds and is reported the same way.
 
+## A note on the scaffold
+
+The baseline measurement runs only the visible command. Running the held-out one
+too would write its answer into the project before the session starts on the
+unsealed arms, which is exactly how the first cell ever run produced a leak flag
+against an agent that had done nothing but read the state directory it was told
+to read. A benchmark that hands over the answer measures its own scaffold.
+
+That cell is worth keeping in mind while reading any result here: it found a
+real hole in evaloop, and it found it through an agent that was not cheating.
+
 ## What this cannot show
 
 A single model, at one point in time, under one prompt. An agent that does not
