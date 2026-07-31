@@ -96,6 +96,78 @@ Complexity ───────────────────────
 
 evaloop occupies the space between "powerful but unreliable single session" and "complex multi-agent orchestration." Minimum viable reliability for long-running autonomous tasks.
 
+## The Older Names for This Problem
+
+The framing this project arrived at through practice has been stated before, more
+precisely, by people who were not thinking about agents at all. Worth recording,
+because it locates the work and shows which parts are genuinely new.
+
+### Campbell's Law (1979)
+
+Donald Campbell wrote the thesis of this project forty-seven years early:
+
+> *"The more any quantitative social indicator is used for social decision-making,
+> the more subject it will be to corruption pressures and the more apt it will be
+> to distort and corrupt the social processes it is intended to monitor."*
+
+Replace "social indicator" with "verify_command" and "social processes" with "the
+work the agent is doing" and nothing else needs changing. An autonomous loop is
+the most concentrated form of decision-making pressure a metric can be put under:
+it is the *only* consumer of that number, and it consumes it thousands of times.
+
+The companion is [Goodhart's Law](https://en.wikipedia.org/wiki/Goodhart's_law),
+in Strathern's formulation: *when a measure becomes a target, it ceases to be a
+good measure.*
+
+### Which failure, and what catches it
+
+Manheim and Garrabrant's [taxonomy of Goodhart variants](https://arxiv.org/abs/1803.04585)
+splits the law into four mechanisms. They partition this project's controls
+almost exactly, including where the controls do not reach:
+
+| Variant | What goes wrong | What catches it here |
+|---|---|---|
+| **Adversarial** | An agent with its own goals exploits the metric | `--sealed-verify`, scoring fingerprints, leak detection |
+| **Regressional** | Selecting on a noisy proxy selects the noise. No bad behaviour required | The held-out metric and its gate |
+| **Extremal** | Optimisation walks into a regime where the proxy no longer tracks the goal | The held-out metric, when the held-out data comes from that other regime |
+| **Causal** | You intervene on a correlate that was never causally upstream | **Nothing here.** evaloop cannot tell you the metric measures the wrong thing |
+
+Two things follow. The first is that adversarial Goodhart — the variant that
+sounds most alarming — is the *least* important of the three this project
+addresses, because it requires misbehaviour. Regressional Goodhart requires
+none, and it is what the qlib run demonstrates: eleven honest rounds, a visible
+Sharpe of 3.6430, a held-out figure of −0.0297.
+
+The second is that causal Goodhart is untouched and probably untouchable by
+tooling. If your metric is the wrong thing to measure, a held-out sample of the
+wrong thing will agree with the visible sample of the wrong thing. Choosing what
+to measure remains a human judgement, and no part of this harness helps with it.
+
+### Single loop, double loop
+
+[Argyris and Schön's](https://infed.org/dir/welcome/chris-argyris-theories-of-action-double-loop-learning-and-organizational-learning/)
+distinction describes the architecture more precisely than OODA does:
+
+- **Single-loop learning** — detect a gap between intended and actual, adjust the
+  action. *The room is cold, turn the thermostat up.*
+- **Double-loop learning** — question the *governing variable* that made that the
+  right action. *Why is the room cold — are we heating the street, or is the
+  target temperature wrong?*
+
+![Two nested loops. The inner blue loop runs act, measure, compare, adjust, and raises the visible metric. The outer amber loop takes that metric to a held-out check, asks whether the target is still right, and returns a gate decision of stop or continue. Caption: the inner loop hits the target, the outer loop asks whether the target was worth hitting](../assets/evaloop-double-loop.png)
+
+An agent loop optimising `verify_command` is pure single-loop learning, and it
+is very good at it. The held-out gate is the second loop: it does not adjust the
+action, it asks whether the governing variable — *this metric, at this target* —
+still means what it did when the run started.
+
+Boyd's OODA remains the right vocabulary for the *phases* of a session, and the
+Orient phase is where the second loop lives: Orient is the update to your model
+of the situation, and the model most likely to be stale in a metric-driven loop
+is "the visible metric still tracks what I want." That is why Orient in this
+project is arithmetic over two series rather than a language model asked for an
+opinion — the question has a computable answer.
+
 ## The Loop-2 Comparison
 
 Once the claim is "verification harness," the neighbours change. Three families:

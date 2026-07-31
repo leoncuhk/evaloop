@@ -1,5 +1,42 @@
 # Changelog
 
+## [7.2.0] — 2026-07-31
+
+The held-out metric now decides something. Until this release it was written to
+`.state/hidden_metrics.json` and read by nothing: the loop declared victory when
+`best_metric` — the figure the agent had spent every session raising — reached
+its target. A project whose thesis is that the visible metric cannot be trusted
+was stopping on the visible metric.
+
+### Added
+- **The held-out gate.** When a held-out series exists, reaching the visible
+  target is no longer sufficient to finish a run. Three properties keep it from
+  becoming the leak it guards against: it can only withhold completion and never
+  cause it, so it never steers the search; it reads the latest clean record
+  rather than the best, because taking the maximum would be selecting on the
+  held-out segment; and records from sessions that rewrote their own scoring or
+  were caught quoting the held-out number are discarded. If every record is
+  discredited the gate stays shut, so corrupting the record is not a way through
+- **`divergence_report()` — Orient, computed rather than asked.** Printed every
+  session at no cost, from two series already on disk. Three candidate rules were
+  tested against the real qlib figures: direction agreement and gap convergence
+  both say "continue" on a run that produced −0.0297 out of sample, and were
+  discarded. Only *does the held-out figure clear the target* survives contact
+  with the data
+- **`.state/orient.md`** — the strategist is now handed the conclusion instead of
+  being left to infer it from raw state. Orient is arithmetic; Decide is
+  judgement
+- Two diagrams: the exit condition, and the two nested loops
+- 8 gate tests anchored on the qlib figures (91 total)
+
+### Changed
+- `docs/design-rationale.md` records the older names for this problem: Campbell's
+  Law (1979) states the thesis forty-seven years early, and Manheim and
+  Garrabrant's Goodhart taxonomy partitions the controls — including causal
+  Goodhart, which nothing here catches and probably nothing can. Argyris and
+  Schön's single/double-loop distinction describes the architecture more
+  precisely than OODA, which remains the right vocabulary for session phases
+
 ## [7.1.0] — 2026-07-30
 
 The harness produced its first held-out result, and a review pass found three

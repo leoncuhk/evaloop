@@ -12,6 +12,8 @@ Your job: synthesize ALL accumulated evidence into a coherent understanding of t
 
 Read the following files (use the Read tool):
 - `hypothesis.md` — research goals, baseline, target metrics
+- `.state/orient.md` — **read this first.** The orchestrator's own assessment,
+  including the held-out metric the working sessions never see
 - `.state/journal.json` — all experiment records and learnings
 - `.state/progress.md` — full session history (scan ALL `**Role**: Strategist` entries for previous Orient decisions)
 - `.state/learnings.md` — accumulated learnings

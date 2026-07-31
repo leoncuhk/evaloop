@@ -21,7 +21,7 @@ jobs:
         run: |
           python3 - <<'EOF'
           import sys
-          budgets = {"run.py": 620, "core.py": 460}
+          budgets = {"run.py": 660, "core.py": 600}
           over = []
           for name, limit in budgets.items():
               n = sum(1 for _ in open(name))

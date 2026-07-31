@@ -181,7 +181,62 @@ The metric above was produced by definitions this session rewrote. Do not treat 
 
 This is the architecture [sandbox-policy research](https://github.com/islo-labs/reward-hack-bench) converges on — scoring runs where the agent does not control it, and the verdict is computed outside the agent's reach. Detection is the weakest of the three and is honest about it: it marks a metric contaminated, it never certifies one clean. For adversarial settings, seal the config *and* run the hidden command against data on a filesystem the agent cannot read.
 
-### 4. What this runs on your machine
+### 4. The held-out metric decides when you are done
+
+A held-out number that nothing reads is decoration. Until 7.2 that is what this
+one was: written to `.state/hidden_metrics.json`, consulted by nothing. The loop
+declared victory when `best_metric` — the figure the agent had spent every
+session raising — reached its target.
+
+![The exit condition: a session ends, the visible metric is checked against the target, and only if it clears does a second amber decision ask whether the held-out metric clears it too; no there means not done because the gains did not transfer. The second question is the one the agent never sees](assets/evaloop-held-out-gate.png)
+
+The exit condition now asks both:
+
+```
+Orient: visible 3.6430 meets the target and held-out -0.0297 does not:
+        the gains have not transferred
+```
+
+Those are the real figures from [`examples/qlib-quant`](examples/qlib-quant/.state/history/hidden-oos-2026-07-30.md).
+Under the old rule that run reports success. Under this one it keeps going and
+says why.
+
+Three properties make the gate safe to trust:
+
+**It can only withhold completion, never cause it.** A high held-out figure
+never finishes a run on its own. Selecting on the held-out segment is the move
+this project exists to prevent, so the gate refuses false victories without
+steering the search.
+
+**It reads the latest clean record, not the best one.** Taking the maximum would
+be choosing a configuration by its held-out score. The latest record describes
+the tree as it stands, which is what would ship.
+
+**A discredited measurement is not evidence.** Records from sessions that
+rewrote their own scoring, or that were caught quoting the held-out number, are
+dropped — and if every record is discredited the gate stays shut, so corrupting
+the record is not a way through.
+
+Projects with no `hidden_verify_command` behave exactly as before.
+
+#### Orient, computed rather than asked
+
+The line above is printed every session and costs nothing: it is arithmetic over
+two series already on disk. Boyd's Orient phase is the one that updates your
+model of the situation, and in a metric-driven loop the model most likely to be
+stale is *the visible metric still tracks what I want*.
+
+Three candidate rules were tested against the qlib figures. Direction agreement
+(both series rising) says continue — both did rise. Gap convergence says
+improving — the gap narrowed from 4.09 to 3.67. Only *does the held-out figure
+clear the target* catches it. The two cleverer rules were discarded because real
+data rejected them.
+
+The strategist prompt still runs on `--orient-interval`, but it is now handed
+`.state/orient.md` — the conclusion — rather than left to infer it from raw
+state. Orient is arithmetic; Decide is judgement.
+
+### 5. What this runs on your machine
 
 `run.py loop` starts an agent **with permissions bypassed** — `bypassPermissions`
 on the SDK path, `--dangerously-skip-permissions` on the CLI path. That is
@@ -210,7 +265,7 @@ The Orient phase is the one exception: it runs with `disallowed_tools=["Bash",
 "Write"]` and a hook restricting `Edit` to `.state/`, because a strategist that
 can modify code is a strategist that can break the build between sessions.
 
-### 5. Budget & stuck controls
+### 6. Budget & stuck controls
 
 - **Circuit breaker**: stops after N consecutive sessions with no progress
 - **Budget cap**: `--max-budget` prevents runaway spending
@@ -257,13 +312,13 @@ vocabulary — and knows nothing about the shipped names. See
 
 ```
 evaloop/
-├── run.py              # Verification harness CLI (578 lines)
-├── core.py             # Pure functions: verification, integrity, state (446 lines)
+├── run.py              # Verification harness CLI (612 lines)
+├── core.py             # Pure functions: verification, integrity, state (548 lines)
 ├── modes/
 │   └── researcher/     # the shipped loop: hypothesis → experiment → evaluate → learn
 ├── tests/
 │   ├── test_run.py     # Unit tests (17 tests)
-│   └── test_integration.py  # Integration tests (66 tests)
+│   └── test_integration.py  # Integration tests (74 tests)
 ├── docs/               # Design rationale and methodology
 └── examples/           # quant-lab, qlib-quant, goal-vs-loop, tamper-demo
     └── <project>/
@@ -391,12 +446,41 @@ Three families of tools sit near this one. They solve adjacent problems, and for
 
 **When not to use it.** If your metric is a fixed test suite the agent cannot edit, `verify_command` adds little over running the tests. If you need dashboards, tracing, or dataset management, use a real eval platform. If you need hard isolation against an adversarial agent, you need a sandbox — this gives you sealing and detection, not containment.
 
+### Which failure this catches, and which it does not
+
+Manheim and Garrabrant's [taxonomy of Goodhart variants](https://arxiv.org/abs/1803.04585)
+partitions this project's controls, including where they stop:
+
+| Variant | What goes wrong | Caught by |
+|---|---|---|
+| **Adversarial** | An agent exploits the metric | sealing, fingerprints, leak detection |
+| **Regressional** | Selecting on a noisy proxy selects the noise — no misbehaviour required | the held-out metric and its gate |
+| **Extremal** | Optimisation walks into a regime where the proxy stops tracking the goal | the held-out metric, if the held-out data is from that regime |
+| **Causal** | You intervened on a correlate that was never causally upstream | **nothing here** |
+
+The variant that sounds most alarming, adversarial, is the least important of the
+three this project addresses, because it needs someone to misbehave.
+Regressional needs no one to misbehave, and it is what the qlib run shows.
+
+Causal Goodhart is untouched and probably untouchable by tooling: a held-out
+sample of the wrong thing agrees with a visible sample of the wrong thing.
+Choosing what to measure stays with you.
+
+The thesis is older than the tooling. Campbell, 1979: *"The more any quantitative
+social indicator is used for social decision-making, the more subject it will be
+to corruption pressures and the more apt it will be to distort and corrupt the
+social processes it is intended to monitor."* An autonomous loop is the most
+concentrated form of that pressure — it is the metric's only consumer, and it
+consumes it thousands of times.
+
 ### The framing this follows
 
 - **LangChain** [4-loop stack](https://blog.langchain.dev/the-art-of-loop-engineering/): Agent → Verification → Application → Hill Climbing. This project is Loop 2.
 - **Osmani** [Loop Engineering](https://addyosmani.com/blog/loop-engineering): "Reliability comes from the loop, not the model."
 - **MLE-bench** [research agents](https://arxiv.org/html/2507.02554): a 9–13% validation/test generalization gap — the empirical case for withholding a metric.
 - **RewardHackBench** [sandbox policies](https://github.com/islo-labs/reward-hack-bench): scoring belongs in an environment the agent does not control.
+- **Argyris & Schön** double-loop learning: the inner loop adjusts the action, the outer questions the governing variable. The held-out gate is the outer loop.
+- **Boyd** OODA: Orient updates your model of the situation. Here it is arithmetic over two series, not a language model asked for an opinion.
 
 ## Design Principles
 

@@ -16,7 +16,7 @@ from core import (
     count_by_status, fingerprint_diff, get_phase, hidden_leak_signals,
     load_conf, parse_metric, progress_count, resolve_verify_cmd,
     run_verification, run_verify_command, safe_read_state, safe_write_state,
-    scoring_fingerprint, validate_state,
+    scoring_fingerprint, validate_state, divergence_report,
 )
 
 SCRIPT_DIR = Path(__file__).parent.parent
@@ -1006,6 +1006,92 @@ def test_unmatched_metric_pattern_leaves_no_metric():
                                   verbose=False)
         assert result["verify"]["success"] is True
         assert result["verify"]["metric"] is None
+
+
+# ═══════════════════════════════════════════
+# Group 8: The held-out gate
+#
+# Until 7.2 the held-out metric was written to a file that nothing read, so a
+# run could report success on the number it had spent every session optimising.
+# ═══════════════════════════════════════════
+
+def _lab(tmp, best, target, hidden=None):
+    state = Path(tmp) / ".state"
+    state.mkdir(parents=True, exist_ok=True)
+    (state / "journal.json").write_text(json.dumps(
+        {"experiments": [], "best_metric": best, "target_metric": target}))
+    if hidden is not None:
+        (state / "hidden_metrics.json").write_text(json.dumps(hidden))
+    return state / "journal.json"
+
+
+def test_visible_target_alone_no_longer_declares_done():
+    """The qlib case, with its real figures: visible 3.6430 against a 1.5
+    target, held out -0.0297. The run is not finished."""
+    with tempfile.TemporaryDirectory() as tmp:
+        conf = load_conf(make_mode_dir(tmp, "metric"))
+        path = _lab(tmp, 3.6430, 1.5, [{"session": "1", "metric": -1.1125},
+                                       {"session": "2", "metric": -0.0297}])
+        assert get_phase(path, conf) == "init"
+
+
+def test_both_metrics_clearing_the_target_finishes_the_run():
+    with tempfile.TemporaryDirectory() as tmp:
+        conf = load_conf(make_mode_dir(tmp, "metric"))
+        path = _lab(tmp, 1.9, 1.5, [{"session": "1", "metric": 1.7}])
+        assert get_phase(path, conf) == "done"
+
+
+def test_without_a_held_out_series_behaviour_is_unchanged():
+    """Projects that configure no hidden command must run exactly as before."""
+    with tempfile.TemporaryDirectory() as tmp:
+        conf = load_conf(make_mode_dir(tmp, "metric"))
+        assert get_phase(_lab(tmp, 1.9, 1.5), conf) == "done"
+        assert get_phase(_lab(tmp, 0.9, 1.5), conf) == "init"
+
+
+def test_the_gate_reads_the_latest_record_not_the_best():
+    """Taking the maximum would be selecting on the held-out segment — the move
+    this project exists to prevent. The latest record describes what would ship."""
+    with tempfile.TemporaryDirectory() as tmp:
+        conf = load_conf(make_mode_dir(tmp, "metric"))
+        path = _lab(tmp, 1.9, 1.5, [{"session": "1", "metric": 1.7},
+                                    {"session": "2", "metric": 0.4}])
+        assert get_phase(path, conf) == "init"
+
+
+def test_a_tampered_or_leaked_measurement_is_not_evidence():
+    with tempfile.TemporaryDirectory() as tmp:
+        conf = load_conf(make_mode_dir(tmp, "metric"))
+        path = _lab(tmp, 1.9, 1.5, [{"session": "1", "metric": 9.9,
+                                     "tampered": ["score.py"]}])
+        assert get_phase(path, conf) == "init", "a rewritten scorer cannot open the gate"
+        path = _lab(tmp, 1.9, 1.5, [{"session": "1", "metric": 9.9,
+                                     "leaks": ["hidden metric 9.9 appears in transcript"]}])
+        assert get_phase(path, conf) == "init", "a leaked measurement cannot open the gate"
+
+
+def test_the_gate_can_only_withhold_completion_never_cause_it():
+    """It must not steer the search — only refuse a false victory."""
+    with tempfile.TemporaryDirectory() as tmp:
+        conf = load_conf(make_mode_dir(tmp, "metric"))
+        path = _lab(tmp, 0.4, 1.5, [{"session": "1", "metric": 9.9}])
+        assert get_phase(path, conf) == "init", "held-out alone must not finish a run"
+
+
+def test_divergence_report_states_the_qlib_case_plainly():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = _lab(tmp, 3.6430, 1.5, [{"session": "1", "metric": -0.0297}])
+        r = divergence_report(path, {})
+        assert r["gate_open"] is False
+        assert r["gap"] is not None and abs(r["gap"] - 3.6727) < 1e-6
+        assert "have not transferred" in r["verdict"]
+
+
+def test_divergence_report_survives_a_project_with_no_state():
+    with tempfile.TemporaryDirectory() as tmp:
+        r = divergence_report(Path(tmp) / ".state" / "journal.json", {})
+        assert r["gate_open"] is True and r["visible"] is None
 
 
 # ═══════════════════════════════════════════

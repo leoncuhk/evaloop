@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-evaloop v7.1.0 — Evaluation-Driven Autonomous Development
+evaloop v7.2.0 — Evaluation-Driven Autonomous Development
 
 For loops whose acceptance criterion is a metric rather than a test suite.
 The orchestrator scores the work, keeps a held-out metric the agent never sees,
@@ -25,14 +25,14 @@ from datetime import datetime
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
-VERSION = "7.1.0"
+VERSION = "7.2.0"
 COMPLETE_SIGNAL = "<promise>COMPLETE</promise>"
 DEFAULT_MODE = "researcher"
 
 from core import (
     load_conf, get_phase, progress_count, run_verification,
     resolve_verify_cmd, safe_read_state, scoring_fingerprint,
-    fingerprint_diff, validate_state,
+    fingerprint_diff, validate_state, divergence_report,
 )
 
 _sdk_available = False
@@ -254,6 +254,33 @@ def _is_inside(path: Path, parent: Path) -> bool:
         return False
 
 
+def _write_orient_brief(project: Path, orient: dict) -> None:
+    """Hand the strategist a conclusion, not a pile of state.
+
+    Boyd's chain is Orient then Decide. The orchestrator does the orienting —
+    it is arithmetic — and the strategist is asked only for the judgement that
+    arithmetic cannot make.
+    """
+    lines = ["# Orient brief", "",
+             "Written by the orchestrator before this session. The held-out",
+             "figure below is the one the working sessions never see; it is",
+             "shown to you so the decision can account for it. Do not copy it",
+             "into any file the working sessions read.", ""]
+    for key, label in [("visible", "Best visible metric"),
+                       ("held_out", "Latest held-out metric"),
+                       ("target", "Target"),
+                       ("gap", "Gap (visible − held out)"),
+                       ("measurements", "Clean held-out measurements")]:
+        if orient.get(key) is not None:
+            lines.append(f"- {label}: {orient[key]}")
+    lines += ["", f"**Assessment**: {orient['verdict']}", ""]
+    if orient.get("target") is not None and not orient["gate_open"]:
+        lines.append("The run cannot be declared complete while this holds, "
+                     "however good the visible metric looks.")
+    (project / ".state").mkdir(parents=True, exist_ok=True)
+    (project / ".state" / "orient.md").write_text("\n".join(lines) + "\n")
+
+
 def _read_session_log(project: Path, session: int) -> str:
     """Read back what the session said, for hidden-metric leak detection."""
     text = []
@@ -343,9 +370,16 @@ async def engine(args):
             print(f"{lp}[{ts()}] All work complete!")
             break
 
-        # ── OODA Orient (strategic review) ──
+        # ── OODA Orient ──
+        # Observe and Orient are arithmetic on two series and run every round.
+        # Decide is a judgement call and stays with the strategist, which is now
+        # handed the conclusion rather than left to infer it from raw state.
+        orient = divergence_report(state_path, conf)
+        if orient["target"] is not None:
+            print(f"{lp}[{ts()}] Orient: {orient['verdict']}")
         if session > 1 and session % args.orient_interval == 0:
-            print(f"\n{lp}[{ts()}] == OODA Orient ==")
+            print(f"\n{lp}[{ts()}] == OODA Decide ==")
+            _write_orient_brief(project, orient)
             r, sim_idx = await _dispatch(simulate, project, mode_dir, conf,
                                          "orient", f"orient_{session}", 15, sim_script, sim_idx)
             total_cost += r["cost"]

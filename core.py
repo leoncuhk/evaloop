@@ -62,6 +62,56 @@ def as_number(value):
         return None
 
 
+def _hidden_records(state_dir: Path) -> list:
+    """Every held-out record on disk, trustworthy or not."""
+    path = Path(state_dir) / "hidden_metrics.json"
+    if not path.is_file():
+        return []
+    try:
+        records = json.loads(path.read_text())
+    except (json.JSONDecodeError, ValueError):
+        return []
+    return [r for r in records if isinstance(r, dict)] if isinstance(records, list) else []
+
+
+def trusted_hidden(state_dir: Path) -> list:
+    """Held-out records whose provenance is clean, oldest first.
+
+    A record produced by a session that rewrote its own scoring, or that was
+    seen quoting the held-out number, is not evidence. Dropping those here is
+    what keeps the gate below from being satisfied by a corrupted measurement.
+    """
+    return [r for r in _hidden_records(state_dir)
+            if as_number(r.get("metric")) is not None
+            and not r.get("tampered") and not r.get("leaks")]
+
+
+def held_out_gate(state_dir: Path, target) -> tuple:
+    """Whether the held-out metric permits declaring the work done.
+
+    Returns (allowed, latest_value). The gate reads the *latest* clean record,
+    not the best one. Taking the maximum would be selecting on the held-out
+    segment — the exact move this project exists to prevent. The latest record
+    describes the tree as it now stands, which is what would ship.
+
+    The gate can only ever withhold completion, never cause it. That asymmetry
+    is deliberate: it refuses a false victory without steering the search, since
+    the agent never sees this number either way.
+    """
+    target = as_number(target)
+    if target is None:
+        return True, None
+    records = trusted_hidden(state_dir)
+    if not records:
+        # No measurements at all leaves nothing to say, so the gate stays open
+        # and behaviour is unchanged for projects that configure no hidden
+        # command. Measurements that exist but are all discredited are the
+        # opposite case: corrupting the record must not become a way through.
+        return (not _hidden_records(state_dir)), None
+    latest = as_number(records[-1].get("metric"))
+    return (latest >= target), latest
+
+
 def get_phase(state_path: Path, conf: dict) -> str:
     """Determine current phase: init | work | done."""
     if not state_path.exists():
@@ -87,7 +137,13 @@ def get_phase(state_path: Path, conf: dict) -> str:
     best = as_number(data.get("best_metric")) or 0.0
     target = as_number(data.get("target_metric"))
     if target:
-        return "done" if best >= target else "init"
+        if best < target:
+            return "init"
+        # The visible target is met. Before calling it done, ask the number the
+        # agent never saw. Until 7.2 nothing did, so a run could report success
+        # on a metric it had spent every session optimising.
+        allowed, _ = held_out_gate(state_path.parent, target)
+        return "done" if allowed else "init"
 
     if done_count == 0:
         return "init"
@@ -232,6 +288,52 @@ def safe_write_state(state_path: Path, data: dict, conf: dict) -> tuple:
     tmp_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
     os.replace(str(tmp_path), str(state_path))
     return True, None
+
+
+def divergence_report(state_path: Path, conf: dict) -> dict:
+    """Orient, computed rather than asked.
+
+    Boyd's Orient phase is the one that updates your model of the situation. In
+    a loop steered by a metric, the model most likely to be stale is the belief
+    that the visible metric still tracks the thing you want. The two series that
+    settle it are already on disk — the journal the agent writes and the
+    held-out records it never sees — and until 7.2 nothing read them together.
+
+    This is deterministic on purpose. It costs no session, runs every round
+    rather than every tenth, and can be tested.
+    """
+    state_path = Path(state_path)
+    report = {"visible": None, "held_out": None, "target": None,
+              "gate_open": True, "verdict": "no target set"}
+    data, _ = safe_read_state(state_path)
+    if data is None:
+        return report
+
+    report["visible"] = as_number(data.get("best_metric"))
+    report["target"] = target = as_number(data.get("target_metric"))
+    records = trusted_hidden(state_path.parent)
+    report["held_out"] = as_number(records[-1].get("metric")) if records else None
+    report["measurements"] = len(records)
+
+    if target is None:
+        return report
+    allowed, _ = held_out_gate(state_path.parent, target)
+    report["gate_open"] = allowed
+
+    v, h = report["visible"], report["held_out"]
+    if h is None:
+        report["verdict"] = ("no held-out measurement yet — every number so far "
+                             "describes the segment being optimised")
+    elif v is not None and v >= target and not allowed:
+        report["verdict"] = (f"visible {v:.4f} meets the target and held-out "
+                             f"{h:.4f} does not: the gains have not transferred")
+    elif not allowed:
+        report["verdict"] = f"held-out {h:.4f} below target {target:.4f}"
+    else:
+        report["verdict"] = f"held-out {h:.4f} meets target {target:.4f}"
+    if v is not None and h is not None:
+        report["gap"] = v - h
+    return report
 
 
 # --- Verification harness (Loop 2) ---
