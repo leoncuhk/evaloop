@@ -1,5 +1,30 @@
 # Changelog
 
+## [7.4.0] — 2026-07-31
+
+### Added
+- **The rolling-window result.** Five folds, each training from 2018, selecting
+  on one year and scored on the next. Paired difference between the tuned
+  configuration and the baseline: **+0.6787 on the selected segment (t=5.94,
+  positive in 5/5 folds), +0.0260 held out (t=0.06, positive in 3/5)**. The
+  tuning reliably improves the metric it was chosen by and does nothing
+  measurable to the one it was not — regressional Goodhart with a sample size,
+  produced by careful honest work with nobody cheating.
+
+  It corrects this repository twice. The first review called the +22.5% a
+  selection artifact outright, which one fold could not support. The single-fold
+  record then softened that to "the direction transferred, the magnitude did
+  not", because the held-out figure had moved +1.08. Four more folds place that
+  +1.08 inside a spread of 0.91 with two folds moving the other way: the
+  direction did not transfer either, and the fold this project had been reasoning
+  from is the worst held-out fold in the study.
+
+  `.state/history/rolling-2026-07-31.md` and the raw JSON beside it.
+
+### Fixed
+- `run_rolling.py` called `qlib.init()` per fold; qlib refuses a second
+  initialisation in one process, so nine of ten folds failed on the first run
+
 ## [7.3.0] — 2026-07-31
 
 ### Added

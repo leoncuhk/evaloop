@@ -1,0 +1,216 @@
+{
+  "note": "Rolling-window study. Training starts 2018 in every fold; the model is selected on the validation year and scored on the year after it. Same fit, two evaluations, scored by run_qlib_backtest.score(). Inherits that runner's construction: top-30 long-short, daily full turnover, no transaction cost.",
+  "generated": "2026-07-31T01:18:39.649868+00:00",
+  "results": [
+    {
+      "valid_year": 2020,
+      "test_year": 2021,
+      "arm": "baseline",
+      "params": {
+        "lambda_l1": 205.7,
+        "lambda_l2": 581.0
+      },
+      "selected_on": {
+        "sharpe": 3.620180167365691,
+        "ann_return": 0.6081528057111427,
+        "ic": 0.039180451848841454,
+        "days": 243
+      },
+      "held_out": {
+        "sharpe": 1.3420961664469138,
+        "ann_return": 0.27847481785445577,
+        "ic": 0.02070499981073719,
+        "days": 243
+      }
+    },
+    {
+      "valid_year": 2020,
+      "test_year": 2021,
+      "arm": "tuned",
+      "params": {
+        "lambda_l1": 100.0,
+        "lambda_l2": 200.0
+      },
+      "selected_on": {
+        "sharpe": 4.209144587098542,
+        "ann_return": 0.6830994757021673,
+        "ic": 0.03880416797649193,
+        "days": 243
+      },
+      "held_out": {
+        "sharpe": 1.9891918260424852,
+        "ann_return": 0.38828865923332395,
+        "ic": 0.023874256547539264,
+        "days": 243
+      }
+    },
+    {
+      "valid_year": 2021,
+      "test_year": 2022,
+      "arm": "baseline",
+      "params": {
+        "lambda_l1": 205.7,
+        "lambda_l2": 581.0
+      },
+      "selected_on": {
+        "sharpe": 0.9280493688030185,
+        "ann_return": 0.17545392055547346,
+        "ic": 0.016130011637798397,
+        "days": 243
+      },
+      "held_out": {
+        "sharpe": 2.7808004346565087,
+        "ann_return": 0.4738003089389002,
+        "ic": 0.020256871105425473,
+        "days": 242
+      }
+    },
+    {
+      "valid_year": 2021,
+      "test_year": 2022,
+      "arm": "tuned",
+      "params": {
+        "lambda_l1": 100.0,
+        "lambda_l2": 200.0
+      },
+      "selected_on": {
+        "sharpe": 1.6565691780745515,
+        "ann_return": 0.32670149417525085,
+        "ic": 0.01773886665283718,
+        "days": 243
+      },
+      "held_out": {
+        "sharpe": 2.836236260243498,
+        "ann_return": 0.5121870378495583,
+        "ic": 0.026158244384842842,
+        "days": 242
+      }
+    },
+    {
+      "valid_year": 2022,
+      "test_year": 2023,
+      "arm": "baseline",
+      "params": {
+        "lambda_l1": 205.7,
+        "lambda_l2": 581.0
+      },
+      "selected_on": {
+        "sharpe": 2.97464626429134,
+        "ann_return": 0.5549504394346678,
+        "ic": 0.028525728703407142,
+        "days": 242
+      },
+      "held_out": {
+        "sharpe": -1.1124611963353703,
+        "ann_return": -0.12985307311308225,
+        "ic": -0.00815315705033276,
+        "days": 242
+      }
+    },
+    {
+      "valid_year": 2022,
+      "test_year": 2023,
+      "arm": "tuned",
+      "params": {
+        "lambda_l1": 100.0,
+        "lambda_l2": 200.0
+      },
+      "selected_on": {
+        "sharpe": 3.642952097084221,
+        "ann_return": 0.6736028391650439,
+        "ic": 0.026829293292071607,
+        "days": 242
+      },
+      "held_out": {
+        "sharpe": -0.029687381382215848,
+        "ann_return": -0.003598453822422557,
+        "ic": -0.00367789927559154,
+        "days": 242
+      }
+    },
+    {
+      "valid_year": 2023,
+      "test_year": 2024,
+      "arm": "baseline",
+      "params": {
+        "lambda_l1": 205.7,
+        "lambda_l2": 581.0
+      },
+      "selected_on": {
+        "sharpe": -0.29156217478231605,
+        "ann_return": -0.0351266797929271,
+        "ic": 0.003389544196310348,
+        "days": 242
+      },
+      "held_out": {
+        "sharpe": 0.657730659311676,
+        "ann_return": 0.0941214740655408,
+        "ic": 0.009951174094322727,
+        "days": 242
+      }
+    },
+    {
+      "valid_year": 2023,
+      "test_year": 2024,
+      "arm": "tuned",
+      "params": {
+        "lambda_l1": 100.0,
+        "lambda_l2": 200.0
+      },
+      "selected_on": {
+        "sharpe": 0.7654408463332045,
+        "ann_return": 0.08862955643014198,
+        "ic": 0.0034535421238328532,
+        "days": 242
+      },
+      "held_out": {
+        "sharpe": -0.5715128921431497,
+        "ann_return": -0.10594390418855781,
+        "ic": 0.011137585762386768,
+        "days": 242
+      }
+    },
+    {
+      "valid_year": 2024,
+      "test_year": 2025,
+      "arm": "baseline",
+      "params": {
+        "lambda_l1": 205.7,
+        "lambda_l2": 581.0
+      },
+      "selected_on": {
+        "sharpe": 1.8306952788012838,
+        "ann_return": 0.37245150862650345,
+        "ic": 0.0294128963218607,
+        "days": 242
+      },
+      "held_out": {
+        "sharpe": 1.8095049954966527,
+        "ann_return": 0.27607267035205885,
+        "ic": 0.02021728958281182,
+        "days": 243
+      }
+    },
+    {
+      "valid_year": 2024,
+      "test_year": 2025,
+      "arm": "tuned",
+      "params": {
+        "lambda_l1": 100.0,
+        "lambda_l2": 200.0
+      },
+      "selected_on": {
+        "sharpe": 2.181649354914622,
+        "ann_return": 0.4088536730721162,
+        "ic": 0.030134265668507288,
+        "days": 242
+      },
+      "held_out": {
+        "sharpe": 1.3836720091726724,
+        "ann_return": 0.21242235540584833,
+        "ic": 0.018063733513971454,
+        "days": 243
+      }
+    }
+  ]
+}

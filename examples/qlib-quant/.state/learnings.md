@@ -15,7 +15,8 @@ whose records are preserved under `.state/history/`:
 | `.state/history/journal-rounds-0-10.json` | The 11-round hyperparameter sweep, one entry per round |
 | `.state/history/progress-rounds-0-10.md` | The session-by-session log for those rounds |
 | `.state/history/mlflow-runs.json` | Distilled MLflow record of the actual backtest executions |
-| `.state/history/hidden-oos-2026-07-30.md` | **The held-out measurement.** Read this before trusting any number below |
+| `.state/history/hidden-oos-2026-07-30.md` | The first held-out measurement, single fold |
+| `.state/history/rolling-2026-07-31.md` | **Five folds. Read this before trusting any number below** |
 | `logs/session_1.log` | Transcript of the Theorizer session that designed EXP-011 |
 
 **Do not read the peak Sharpe of 3.6430 as the current metric.** It was reached
@@ -33,11 +34,14 @@ on a config that is no longer in the working tree.
 - Net: baseline Sharpe 2.9746 → 3.6430 (+22.5%) by only lowering λ to 100/200.
 - IC and Sharpe are not perfectly aligned: round 1 raised Sharpe while *lowering* IC. Optimize the target (Sharpe).
 - `--split train` evaluates the 2022 valid segment; `--split test` (2023) is hidden from the agent.
-- **The held-out figures are now known, and they change how to read this section.**
-  On 2023: baseline scores **−1.1125**, the λ=100/200 peak scores **−0.0297**.
-  The direction of the tuning transferred (held-out improved by 1.08), the level
-  did not (3.6430 visible ↔ −0.0297 held out). Treat every Sharpe listed above as
-  a statement about the 2022 segment only. See `.state/history/hidden-oos-2026-07-30.md`.
+- **Five folds settle it, and they overturn the single-fold reading.** Paired
+  tuned-minus-baseline across valid years 2020–2024: **selected segment +0.6787,
+  t=5.94, positive in 5/5 folds; held out +0.0260, t=0.06, positive in 3/5.**
+  The tuning is a dependable gain on the number it was chosen by and a null
+  result on the number it was not. The 2022→2023 fold this section was written
+  from is the worst held-out fold in the study. Treat every Sharpe above as a
+  statement about its own selection segment. See
+  `.state/history/rolling-2026-07-31.md`.
 
 ## Phase transition: model-HP tuning → feature engineering (EXP-011)
 
