@@ -78,7 +78,8 @@ session, revert on regression, accumulate learnings.
 
 A mode is still just a directory. The engine reads what a mode declares — entry
 file, state file, work array, status vocabulary — and knows nothing about the
-name `researcher`. Defining a loop for a different kind of work is a `mode.conf`
+bundled name, and `--mode` takes a path, so a loop for different work lives in
+your project rather than in this repository. Defining one is a `mode.conf`
 away, and the test suite drives an unfamiliar mode end to end to keep that true.
 
 ## Positioning

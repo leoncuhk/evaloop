@@ -17,5 +17,5 @@ What should have happened?
 ## Environment
 - OS:
 - Engine version:
-- Mode: engineer / researcher / auditor
+- Mode: (bundled `experiment`, or your own)
 - Claude Code version:

@@ -1,5 +1,39 @@
 # Changelog
 
+## [7.5.0] — 2026-07-31
+
+A file-by-file audit. Most of what follows is removal.
+
+### Removed
+- **`examples/quant-lab/.state/` was fabricated.** Six experiments with detailed
+  learnings, a best metric of 1.89, added as a demo in March and never produced
+  by a run — there are no transcripts because there were no sessions. An earlier
+  README admitted this; the admission was lost in the 7.0 rewrite and the
+  fabrication was not. A repository whose stated rule is that claims must point
+  at a tracked artifact cannot ship an invented experiment log as an example of
+  one. Removed rather than relabelled, and `examples/quant-lab/README.md` says so
+- **`requirements.txt`** pinned `claude-agent-sdk`, which is optional and
+  imported behind a try/except, and omitted the numpy and pandas the examples
+  actually use. It described the dependencies of no version of this project
+
+### Changed
+- **`modes/researcher` → `modes/experiment`, and `--mode` now takes a path.**
+  Resolving only bundled names made `modes/` a registry rather than an extension
+  point: defining your own loop meant putting it inside this repository. The name
+  `researcher` was also a leftover of the three-mode era, meaningful only in
+  contrast to modes that no longer exist
+- **README 570 → 398 lines.** The 146-line verification deep dive moved to
+  `docs/verification.md` and the 82-line empirical record to
+  `docs/empirical-record.md`, each replaced by a summary that links to it. Three
+  overlapping command sections became two. A capability table still describing
+  the pre-7.3 location of the held-out record went with them
+- **CONTRIBUTING rewritten.** It referenced `examples/todo-app`, removed in 7.0;
+  claimed 54 tests against 93; described `run.py` as 485 lines against 626; and
+  its mode template omitted the schema declaration the engine now validates
+  against
+- Diagrams re-encoded: 3.3 MB → 985 KB, no visible change. The generator emitted
+  36,969 distinct colours for flat two-colour line art
+
 ## [7.4.0] — 2026-07-31
 
 ### Added

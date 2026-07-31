@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-evaloop v7.4.0 — Evaluation-Driven Autonomous Development
+evaloop v7.5.0 — Evaluation-Driven Autonomous Development
 
 For loops whose acceptance criterion is a metric rather than a test suite.
 The orchestrator scores the work, keeps a held-out metric the agent never sees,
@@ -25,9 +25,9 @@ from datetime import datetime
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
-VERSION = "7.4.0"
+VERSION = "7.5.0"
 COMPLETE_SIGNAL = "<promise>COMPLETE</promise>"
-DEFAULT_MODE = "researcher"
+DEFAULT_MODE = "experiment"
 
 from core import (
     load_conf, get_phase, progress_count, run_verification,
@@ -245,6 +245,24 @@ def ts() -> str:
     return datetime.now().strftime("%H:%M:%S")
 
 
+def resolve_mode(name: str) -> Path:
+    """A mode is a directory. Accept a path to one, or the name of a bundled one.
+
+    Resolving only bundled names made `modes/` a registry rather than an
+    extension point: defining your own loop meant putting it inside this
+    repository. A path lets it live in your project, where it belongs.
+    """
+    candidate = Path(name).expanduser()
+    if candidate.is_dir() and (candidate / "mode.conf").is_file():
+        return candidate.resolve()
+    bundled = SCRIPT_DIR / "modes" / name
+    if bundled.is_dir():
+        return bundled
+    available = sorted(d.name for d in (SCRIPT_DIR / "modes").iterdir() if d.is_dir())
+    sys.exit(f"Mode '{name}' is neither a directory containing mode.conf nor one "
+             f"of the bundled modes: {', '.join(available)}")
+
+
 def _is_inside(path: Path, parent: Path) -> bool:
     """True if path sits under parent — i.e. within the agent's reach."""
     try:
@@ -305,10 +323,7 @@ async def engine(args):
     simulate = getattr(args, "simulate", False)
     lp = "[SIMULATE] " if simulate else ""
 
-    mode_dir = SCRIPT_DIR / "modes" / args.mode
-    if not mode_dir.is_dir():
-        avail = [d.name for d in (SCRIPT_DIR / "modes").iterdir() if d.is_dir()]
-        sys.exit(f"Mode '{args.mode}' not found. Available: {', '.join(avail)}")
+    mode_dir = resolve_mode(args.mode)
 
     conf = load_conf(mode_dir)
     project = Path(args.project_dir).resolve()
@@ -333,7 +348,7 @@ async def engine(args):
             dst.write_text(template)
         elif dst.read_text() != template:
             dst.write_text(template)
-            print(f"  Refreshed CLAUDE.md from modes/{args.mode} template")
+            print(f"  Refreshed CLAUDE.md from the {mode_dir.name} mode template")
 
     sealed = Path(args.sealed_verify).resolve() if getattr(args, "sealed_verify", None) else None
     if sealed and not sealed.is_file():
@@ -489,9 +504,7 @@ async def engine(args):
 
 def cmd_verify(args):
     """Run verification only — no LLM calls."""
-    mode_dir = SCRIPT_DIR / "modes" / args.mode
-    if not mode_dir.is_dir():
-        sys.exit(f"Mode '{args.mode}' not found.")
+    mode_dir = resolve_mode(args.mode)
     conf = load_conf(mode_dir)
     project = Path(args.project_dir).resolve()
     if not project.is_dir():
@@ -516,9 +529,7 @@ def cmd_verify(args):
 
 def cmd_status(args):
     """Show project phase and progress."""
-    mode_dir = SCRIPT_DIR / "modes" / args.mode
-    if not mode_dir.is_dir():
-        sys.exit(f"Mode '{args.mode}' not found.")
+    mode_dir = resolve_mode(args.mode)
     conf = load_conf(mode_dir)
     project = Path(args.project_dir).resolve()
     sealed = Path(args.sealed_verify).resolve() if getattr(args, "sealed_verify", None) else None
@@ -553,7 +564,9 @@ def main():
     import argparse
 
     def _mode(p):
-        p.add_argument("--mode", default=DEFAULT_MODE)
+        p.add_argument("--mode", default=DEFAULT_MODE,
+                       help="A bundled mode name, or a path to a directory "
+                            "containing mode.conf")
 
     top = argparse.ArgumentParser(
         description=f"evaloop v{VERSION} — Verification Harness")

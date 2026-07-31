@@ -1,4 +1,4 @@
-# Qlib configuration — modified by the loop's researcher mode
+# Qlib configuration — the file the loop edits between experiments
 # The LLM modifies this file to propose new experiments
 
 model:

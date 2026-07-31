@@ -24,7 +24,7 @@ def test_count_done():
     data = {"tasks": [{"status": "done"}, {"status": "pending"}, {"status": "done"}]}
     assert count_by_status(data, '[.tasks[] | select(.status == "done")] | length') == 2
 
-def test_count_researcher():
+def test_count_experiments():
     data = {"experiments": [
         {"status": "accepted"}, {"status": "rejected"},
         {"status": "pending"}, {"status": "running"},

@@ -37,23 +37,33 @@ same segment it selected from, and the held-out run that would have settled it
 was executed once and its result discarded. Full record in
 [`examples/qlib-quant/.state/history/`](examples/qlib-quant/.state/history/).
 
-## What it does
+## Try it
 
-| Layer | What it means here |
-|---|---|
-| **Verification** | `verify_command` — run by the orchestrator, not reported by the agent |
-| **Held-out metric** | `hidden_verify_command` — written to `.state/hidden_metrics.json`, never fed back |
-| **Scoring integrity** | `--sealed-verify` puts the definition beyond the agent's reach; in-project scorers are fingerprinted around every session |
-| **Provenance** | Every recorded metric says whether it was sealed, tampered with, or leaked |
-| **Session loop** | Optional. Stateless sessions, file-based state, circuit breaker, budget cap |
+Nothing here needs an API key or an LLM. Both of these run from a fresh clone.
+
+```bash
+git clone https://github.com/leoncuhk/evaloop && cd evaloop
+
+# Score a project. Prints the visible metric, records the held-out one,
+# exits non-zero on failure.
+python run.py verify examples/quant-lab
+
+# Watch a session rewrite its own scorer and get caught. Replayed from a
+# script, so no LLM calls and no cost.
+python run.py loop --simulate --pause 0 examples/tamper-demo
+```
+
+The second prints `TAMPERED: scoring inputs changed during the session` and
+refuses to call the metric a result. To replay it, `rm -rf
+examples/tamper-demo/.state/journal.json examples/tamper-demo/logs`.
+
+## Three ways to use it
 
 In [Loop Engineering](https://addyosmani.com/blog/loop-engineering) terms this is
 Loop 2 with a thin Loop 3 attached; in [harness
 engineering](https://addyosmani.com/blog/agent-harness-engineering/) terms it is
 the enforcement layer, and it assumes you already have an execution layer —
 Claude Code, the Agent SDK, or your own.
-
-## Three ways to use it
 
 ### 1. As an evaluator for a search loop you already have
 
@@ -66,7 +76,7 @@ unhackable evaluator and leaves that to you. This is that evaluator:
 from pathlib import Path
 from core import run_verification, load_conf
 
-conf = load_conf(Path("modes/researcher"))
+conf = load_conf(Path("modes/experiment"))
 result = run_verification(
     "/path/to/candidate",              # what the search just produced
     conf,
@@ -96,180 +106,61 @@ python run.py loop ./my-project --sealed-verify ~/scoring/proj.conf
 Stateless sessions against `hypothesis.md`, verification after each, hidden
 metric accumulated across the run, circuit breaker and budget cap.
 
-## Quick Start
+### Starting your own
+
+The loop scores by running your project's own evaluation script, so give it one
+that already works before spending a session:
 
 ```bash
-git clone https://github.com/leoncuhk/evaloop
-cd evaloop
-
-# Score a project — no LLM calls, no cost. Prints the visible metric,
-# records the held-out one, exits non-zero on failure.
-python run.py verify examples/quant-lab
-
-# Keep the scoring definition outside the project the agent writes to
-echo 'hidden_verify_command=python3 run_backtest.py --split test' > ~/task.conf
-python run.py verify examples/quant-lab --sealed-verify ~/task.conf
-
-# Watch the integrity layer catch a session that rewrites its own scorer.
-# Replayed from a script — no LLM calls, no cost.
-python run.py loop --simulate --pause 0 examples/tamper-demo
-# ...and to replay it:
-# rm -rf examples/tamper-demo/.state/journal.json examples/tamper-demo/logs
-
-# Run a real loop against your own hypothesis. Copy a working baseline first —
-# researcher mode scores by running the project's own evaluation script.
 mkdir my-lab
 cp examples/quant-lab/{hypothesis.md,run_backtest.py,strategies.py} my-lab/
-python run.py verify my-lab          # confirm it scores before spending anything
+echo 'hidden_verify_command=python3 run_backtest.py --split test' > ~/task.conf
+
+python run.py verify my-lab                          # confirm it scores
 python run.py loop my-lab --sealed-verify ~/task.conf
 ```
 
-## The Verification Layer
+## How it works
 
-This is the core value of the project. After each work session:
+Four things happen around every session. Each is one paragraph here and a
+section in [docs/verification.md](docs/verification.md).
 
-### 1. Independent `verify_command`
+**The orchestrator runs the scoring.** `verify_command` is executed by evaloop,
+not reported by the agent. Configured in `mode.conf`, or per project in
+`.verify`, or — beyond the agent's reach — in a sealed file.
 
-Runs a command that the orchestrator controls, not the LLM. Configured in `mode.conf` or overridden per-project with a `.verify` file:
+**A second metric is withheld.** `hidden_verify_command` runs on data the agent
+never sees. Research agents on [MLE-bench](https://arxiv.org/html/2507.02554)
+show a persistent 9–13% validation/test generalization gap; a number the agent
+never sees is the only measurement that survives its own optimiser.
 
-```ini
-# modes/researcher/mode.conf
-verify_command = python run_backtest.py --split train
+**The scoring definition is defended.** `--sealed-verify` puts it outside the
+project, and the held-out record beside it. Files inside the project that do the
+scoring are hashed before and after each session, so a run that rewrites its own
+scorer reports `TAMPERED` instead of a result. Transcripts are scanned for the
+held-out figure. Sealing is structural, fingerprinting is reliable, leak
+detection is neither and says so.
 
-# examples/qlib-quant/.verify (project-level override)
-verify_command = python qlib_backtest.py --split train
-hidden_verify_command = python qlib_backtest.py --split test
-```
-
-### 2. Hidden out-of-sample validation
-
-`hidden_verify_command` runs on data the LLM never sees. The metric is written to `.state/hidden_metrics.json` and is never fed back to the LLM by the orchestrator.
-
-Why it matters, empirically: research agents on [MLE-bench](https://arxiv.org/html/2507.02554) show a persistent **9–13% validation/test generalization gap**. An agent optimising a visible metric will find the gap. A number the agent never sees is the only one that measures whether the work generalizes.
-
-### 3. Scoring integrity
-
-Not surfacing a metric is not the same as an agent being unable to obtain it. Everything under the project directory is writable by the agent — including `.verify` and the scripts it names. A live session in [`examples/goal-vs-loop/logs/session_4.log`](examples/goal-vs-loop/logs/session_4.log) ran the hidden split itself and reported `hidden test split = 1.5233` in its own summary.
-
-Three controls, in order of strength:
-
-**Seal the scoring definition** — `--sealed-verify FILE` reads the verification config from a path outside the project. It outranks the project's `.verify`, so an agent that rewrites `.verify` changes nothing. The harness refuses a sealed file that resolves inside the project. **The held-out record is written beside it**, in the operator's own space — through 7.2 it went to `<project>/.state/hidden_metrics.json`, the directory every mode instructs the agent to read first, which made "never fed back" untrue by one `cat`. Without a sealed config there is nowhere else to put it, and the run says so.
-
-```bash
-# operator-owned, outside the repo the agent works in
-echo 'hidden_verify_command=python3 run_backtest.py --split test' > ~/scoring/proj.conf
-python run.py loop ./proj --mode researcher --sealed-verify ~/scoring/proj.conf
-```
-
-**Fingerprint what does the scoring** — before each session the orchestrator hashes `.verify` and every in-project file the verification commands invoke, then re-hashes afterwards. A change means the session rewrote its own scoring, and the metric is reported as untrusted rather than as a result:
-
-```
-verify: PASS (exit 0) | metric: 99.0
-TAMPERED: scoring inputs changed during the session: score.py
-The metric above was produced by definitions this session rewrote. Do not treat it as a result.
-```
-
-**Detect leaks after the fact** — each session's transcript is scanned for the hidden invocation and for the hidden metric's own value. Hits are recorded with the metric, so a contaminated number is never silently mixed with clean ones:
-
-```json
-[
-  {"session": "1", "metric": 0.84, "timestamp": "...", "sealed": true},
-  {"session": "3", "metric": 1.5233, "timestamp": "...", "sealed": false,
-   "leaks": ["hidden metric 1.5233 appears in transcript"]}
-]
-```
-
-This is the architecture [sandbox-policy research](https://github.com/islo-labs/reward-hack-bench) converges on — scoring runs where the agent does not control it, and the verdict is computed outside the agent's reach. Detection is the weakest of the three and is honest about it: it marks a metric contaminated, it never certifies one clean. For adversarial settings, seal the config *and* run the hidden command against data on a filesystem the agent cannot read.
-
-### 4. The held-out metric decides when you are done
-
-A held-out number that nothing reads is decoration. Until 7.2 that is what this
-one was: written to `.state/hidden_metrics.json`, consulted by nothing. The loop
-declared victory when `best_metric` — the figure the agent had spent every
-session raising — reached its target.
+**The held-out metric decides when you are done.** Reaching the visible target
+is not sufficient. The gate can only withhold completion, never cause it; it
+reads the latest clean record rather than the best; and a discredited record is
+not evidence.
 
 ![The exit condition: a session ends, the visible metric is checked against the target, and only if it clears does a second amber decision ask whether the held-out metric clears it too; no there means not done because the gains did not transfer. The second question is the one the agent never sees](assets/evaloop-held-out-gate.png)
-
-The exit condition now asks both:
 
 ```
 Orient: visible 3.6430 meets the target and held-out -0.0297 does not:
         the gains have not transferred
 ```
 
-Those are the real figures from [`examples/qlib-quant`](examples/qlib-quant/.state/history/hidden-oos-2026-07-30.md).
-Under the old rule that run reports success. Under this one it keeps going and
-says why.
+Those are real figures from [`examples/qlib-quant`](docs/empirical-record.md).
+Under the old rule that run reports success.
 
-Three properties make the gate safe to trust:
-
-**It can only withhold completion, never cause it.** A high held-out figure
-never finishes a run on its own. Selecting on the held-out segment is the move
-this project exists to prevent, so the gate refuses false victories without
-steering the search.
-
-**It reads the latest clean record, not the best one.** Taking the maximum would
-be choosing a configuration by its held-out score. The latest record describes
-the tree as it stands, which is what would ship.
-
-**A discredited measurement is not evidence.** Records from sessions that
-rewrote their own scoring, or that were caught quoting the held-out number, are
-dropped — and if every record is discredited the gate stays shut, so corrupting
-the record is not a way through.
-
-Projects with no `hidden_verify_command` behave exactly as before.
-
-#### Orient, computed rather than asked
-
-The line above is printed every session and costs nothing: it is arithmetic over
-two series already on disk. Boyd's Orient phase is the one that updates your
-model of the situation, and in a metric-driven loop the model most likely to be
-stale is *the visible metric still tracks what I want*.
-
-Three candidate rules were tested against the qlib figures. Direction agreement
-(both series rising) says continue — both did rise. Gap convergence says
-improving — the gap narrowed from 4.09 to 3.67. Only *does the held-out figure
-clear the target* catches it. The two cleverer rules were discarded because real
-data rejected them.
-
-The strategist prompt still runs on `--orient-interval`, but it is now handed
-`.state/orient.md` — the conclusion — rather than left to infer it from raw
-state. Orient is arithmetic; Decide is judgement.
-
-### 5. What this runs on your machine
-
-`run.py loop` starts an agent **with permissions bypassed** — `bypassPermissions`
-on the SDK path, `--dangerously-skip-permissions` on the CLI path. That is
-deliberate: a loop that stops for approval every session is not autonomous. It
-also means the agent executes shell commands in your project directory without
-asking, for as many sessions as your limits allow.
-
-There is a `PreToolUse` hook that refuses a short list of obviously destructive
-commands (`rm -rf /`, `git push --force`, `DROP TABLE`, …). It matches
-substrings, so it is a guard against an agent's accident, **not a security
-boundary against an adversarial one**. Measured against its own list:
-
-| Command | Result |
-|---|---|
-| `rm -rf /` | blocked |
-| `cd / && rm -rf .` | blocked |
-| `rm -fr /` | **allowed** |
-| `rm  -rf /` (two spaces) | **allowed** |
-| `python3 -c "import shutil; shutil.rmtree('/')"` | **allowed** |
-
-Run the loop in a container, a VM, or a throwaway working copy — anywhere you
-would be willing to let an unattended process run `rm`. `verify` and `status`
-make no LLM calls and start no agent, so they are safe to run anywhere.
-
-The Orient phase is the one exception: it runs with `disallowed_tools=["Bash",
-"Write"]` and a hook restricting `Edit` to `.state/`, because a strategist that
-can modify code is a strategist that can break the build between sessions.
-
-### 6. Budget & stuck controls
-
-- **Circuit breaker**: stops after N consecutive sessions with no progress
-- **Budget cap**: `--max-budget` prevents runaway spending
-- **Retry**: automatic single retry on error/timeout (don't waste session slots)
+> **What this runs on your machine.** `run.py loop` starts an agent with
+> permissions bypassed, and the safety hook is a substring blocklist that stops
+> an accident, not an adversary. Run it in a container or a throwaway copy.
+> `verify` and `status` make no LLM calls and start no agent.
+> [Details](docs/verification.md).
 
 ## Architecture
 
@@ -312,103 +203,39 @@ vocabulary — and knows nothing about the shipped names. See
 
 ```
 evaloop/
-├── run.py              # Verification harness CLI (613 lines)
-├── core.py             # Pure functions: verification, integrity, state (575 lines)
-├── modes/
-│   └── researcher/     # the shipped loop: hypothesis → experiment → evaluate → learn
-├── tests/
-│   ├── test_run.py     # Unit tests (17 tests)
-│   └── test_integration.py  # Integration tests (76 tests)
-├── docs/               # Design rationale and methodology
-└── examples/           # quant-lab, qlib-quant, goal-vs-loop, tamper-demo
-    └── <project>/
-        ├── .state/learnings.md   # Cross-session knowledge (tracked)
-        ├── .state/history/       # Archived records of completed runs
-        └── logs/                 # Verbatim session transcripts
+├── run.py              # CLI and the optional session loop
+├── core.py             # verification, scoring integrity, state, metrics
+├── modes/experiment/   # the one bundled loop; --mode also takes a path
+├── tests/              # 93 tests, run by CI on 3.10 / 3.11 / 3.12
+├── bench/              # does an agent get around the controls? (live sessions)
+├── docs/               # verification, empirical record, design rationale, archive
+├── assets/             # diagrams
+└── examples/
+    ├── quant-lab/      # scores anywhere; used by the quick start and CI
+    ├── tamper-demo/    # the integrity layer, replayed, no LLM calls
+    ├── goal-vs-loop/   # four live sessions, transcripts kept
+    └── qlib-quant/     # real market data, twelve sessions, five-fold held-out study
 ```
 
-## Empirical Record
+## Does any of this matter?
 
-What has and has not actually been measured. Every claim below points at a file
-in this repository, so it can be checked rather than taken on trust.
+The qlib example ran an eleven-round hyperparameter sweep, then both
+configurations were scored across five folds against years no round ever saw.
+Paired difference, tuned minus baseline:
 
-### What was run against a live model
-
-| Example | Sessions | Outcome | Record |
+| Segment | Mean | *t*(4) | Folds positive |
 |---|---|---|---|
-| `examples/goal-vs-loop` | 4 (Theorizer/Executor ×2) | Sharpe 0.8363 → 1.9084 on synthetic data, target 1.5 met | [`logs/`](examples/goal-vs-loop/logs/), [`.state/history/`](examples/goal-vs-loop/.state/history/), and `session-history.bundle` (`git clone` it to replay all 5 commits) |
-| `examples/qlib-quant`<br>([prerequisites](examples/qlib-quant/PREREQUISITES.md)) | 12, incl. an 11-round sweep | +0.68 on the selected segment across 5 folds (*t*=5.94); **+0.03 held out (*t*=0.06)** | [`.state/history/`](examples/qlib-quant/.state/history/), [`logs/`](examples/qlib-quant/logs/), [`.state/learnings.md`](examples/qlib-quant/.state/learnings.md) |
+| Selected on | **+0.6787** | +5.94 | 5 / 5 |
+| Held out | **+0.0260** | +0.06 | 3 / 5 |
 
-Both working trees are reset to baseline so the examples start clean; the runs
-above are preserved under `.state/history/` rather than in the live state files.
+**The tuning reliably improves the metric it was chosen by and does nothing
+measurable to the one it was not.** Nobody cheated in any of those runs. That is
+what a held-out metric buys, and no amount of care on the visible segment would
+have shown it.
 
-### The held-out measurement
-
-The qlib configurations were scored against years no tuning round ever saw, with
-the scoring definition sealed outside the project. This is the result the whole
-harness exists to obtain. Method, caveats and reproduction:
-[single fold](examples/qlib-quant/.state/history/hidden-oos-2026-07-30.md),
-[five folds](examples/qlib-quant/.state/history/rolling-2026-07-31.md).
-
-Five folds. Each trains from 2018, selects on one year, and is scored on the
-next. Paired difference between the tuned configuration and the baseline:
-
-| Segment | Mean | s.d. | *t*(4) | Folds positive |
-|---|---|---|---|---|
-| **Selected on** | **+0.6787** | 0.256 | **+5.94** | 5 / 5 |
-| **Held out** | **+0.0260** | 0.906 | **+0.06** | 3 / 5 |
-
-**The tuning reliably improves the metric it was selected on and does nothing
-measurable to the one it was not.** Every fold agrees on the first. None agree on
-the second.
-
-Nobody cheated in any of these runs. The eleven-round sweep that produced
-λ=100/200 was careful, honest work, and what it produced is a dependable
-improvement to a number and a null result on the thing that number stood for.
-This is what a held-out metric buys, and no amount of care on the visible segment
-would have revealed it.
-
-It also corrects this file twice. An earlier version called the +22.5% "a
-selection gain, not an out-of-sample result" — too strong on one fold. The
-single-fold record then softened that to "the direction transferred, the
-magnitude did not", because the held-out figure had moved from −1.1125 to
-−0.0297. Four more folds show that +1.08 sitting inside a spread of 0.91 with two
-folds moving the other way: the direction did not transfer either. The fold this
-project had been reasoning from is also the worst held-out fold in the study.
-
-### What those numbers do not show
-
-- **The qlib sweep selected on the segment it scored on.** `--split train` maps
-  to the 2022 *valid* segment, and all 11 rounds were chosen by that number.
-  Every Sharpe in the journal is a statement about 2022 alone.
-- **Five folds, one universe, one model family.** Not a distribution over
-  markets, model classes or feature sets. The paired *t* also assumes folds are
-  independent, and overlapping training windows make them correlated — which
-  inflates the selected-segment statistic. The held-out result is null either
-  way, and null is the finding.
-- **`run_qlib_backtest.py` is not qlib's backtest pipeline.** It implements its
-  own top-30/bottom-30 long-short with daily full turnover and no transaction
-  cost, slippage, or position limits — despite `hypothesis.md` requiring the
-  standard pipeline. The configured `topk`/`n_drop` are read but never applied.
-  A Sharpe near 3–4 under zero cost is the expected magnitude of that
-  construction, not evidence of an edge.
-- **goal-vs-loop runs on synthetic data** with injected drift and AR(1)=0.15
-  momentum. The mechanism the agent found is real *for that generator* and says
-  nothing about real markets.
-
-### What has not been measured
-
-An end-to-end validation — many live runs against a control — has not been done.
-
-Through 6.x this repository shipped `experiments/run_validation.py`, which
-printed "the Loop Engineering approach is VALIDATED". It did not establish that.
-Two of its three hypotheses ran against hardcoded scripts whose metric
-trajectories were written into the file, so convergence was an input rather than
-a finding; the third compared two hand-written strategies across 12 seeds, at
-7/12 — indistinguishable from a coin (binomial *p* ≈ 0.39) — against an arbitrary
-55% pass threshold. What it genuinely checked, phase decisions and end-to-end
-orchestration, is covered by the test suite and by CI. It was removed in 7.0
-rather than kept with a corrected verdict.
+What has and has not been measured, what those figures do not show, and where
+this repository's own earlier readings were wrong:
+[docs/empirical-record.md](docs/empirical-record.md).
 
 ## CLI Reference
 
@@ -419,7 +246,8 @@ python run.py status  <project>                          # phase and progress
 python run.py list-modes                                 # modes found in modes/
 python run.py <project> [options]                        # backward compat → loop
 
---mode NAME   Any directory under modes/. Defaults to the shipped `researcher`.
+--mode NAME   A bundled mode name, or a path to any directory holding a
+              mode.conf. Defaults to the bundled `experiment`.
 ```
 
 | Loop option | Default | Description |
@@ -508,12 +336,19 @@ These address the [six failure modes](https://arxiv.org/abs/2601.03315) of auton
 
 ## Prerequisites
 
+Nothing, for `verify` and `status`. evaloop is standard library only, and there
+is no `requirements.txt` because there is nothing to install.
+
+To run the loop you need one of:
+
 ```bash
-pip install claude-agent-sdk               # Optional: adds SDK hooks and cost tracking
-npm install -g @anthropic-ai/claude-code   # Claude Code CLI (alternative to SDK)
+npm install -g @anthropic-ai/claude-code   # the CLI path
+pip install claude-agent-sdk               # optional: adds SDK hooks and cost tracking
 ```
 
-Either SDK or CLI works. Use `--simulate` to test without either.
+`--simulate` needs neither. The bundled examples want `numpy` and `pandas`, and
+`examples/qlib-quant` wants rather more — see its
+[prerequisites](examples/qlib-quant/PREREQUISITES.md).
 
 ## FAQ
 
@@ -530,7 +365,7 @@ Yes. Same command again. The engine re-reads `.state/` and continues from where 
 A per-project override for the scoring commands, taking precedence over `mode.conf`. It lives inside the project, so the agent can edit it — which is why a session that changes it is reported as `TAMPERED`, and why `--sealed-verify` exists for the cases where that is not good enough.
 
 **Why is there a mode system if only one mode ships?**
-Because a mode is the only thing that describes your loop: which file states the goal, which file holds the work, and what statuses that work can be in. The engine reads those declarations and knows nothing about the name `researcher`. Copy `modes/researcher/` to point the loop at different work.
+Because a mode is the only thing that describes your loop: which file states the goal, which file holds the work, and what statuses that work can be in. The engine reads those declarations and knows nothing about the bundled name. `--mode` takes a path, so copy `modes/experiment/` into your own project and point at it there — it does not have to live in this repository.
 
 **What happened to engineer and auditor modes?**
 Cut in 7.0. Everything that makes this project worth using — held-out metrics, sealed scoring, integrity checks — only applied to the metric-scored loop. See [the design rationale](docs/design-rationale.md).

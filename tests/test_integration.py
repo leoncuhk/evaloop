@@ -119,7 +119,7 @@ def test_phase_done_when_all_complete():
         assert get_phase(state_path, conf) == "done"
 
 
-def test_researcher_target_met():
+def test_metric_target_met():
     """Best metric >= target -> done. Loop exits."""
     with tempfile.TemporaryDirectory() as tmp:
         conf = load_conf(make_mode_dir(tmp, "metric"))
@@ -131,7 +131,7 @@ def test_researcher_target_met():
         assert get_phase(state_path, conf) == "done"
 
 
-def test_researcher_cycles_back():
+def test_metric_loop_cycles_back():
     """Target not met, no pending experiments -> init. Loop dispatches theorizer."""
     with tempfile.TemporaryDirectory() as tmp:
         conf = load_conf(make_mode_dir(tmp, "metric"))
@@ -252,7 +252,7 @@ def test_mode_declaring_no_schema_is_not_validated():
 
 def test_shipped_mode_declares_a_schema():
     """The one mode evaloop ships must not opt out of its own validation."""
-    conf = load_conf(SCRIPT_DIR / "modes" / "researcher")
+    conf = load_conf(SCRIPT_DIR / "modes" / "experiment")
     assert conf.get("state_array") and conf.get("valid_statuses")
     ok, _ = validate_state({"experiments": [{"id": "E", "status": "accepted"}]}, conf)
     assert ok
@@ -263,10 +263,9 @@ def test_shipped_mode_declares_a_schema():
 def test_archived_journals_still_validate():
     """Real runs wrote `round`/`decision`. A validator stricter than the reader
     would reject state the loop is happy to act on."""
-    conf = load_conf(SCRIPT_DIR / "modes" / "researcher")
+    conf = load_conf(SCRIPT_DIR / "modes" / "experiment")
     for rel in ["examples/qlib-quant/.state/history/journal-rounds-0-10.json",
-                "examples/goal-vs-loop/.state/history/journal-exp001-002.json",
-                "examples/quant-lab/.state/journal.json"]:
+                "examples/goal-vs-loop/.state/history/journal-exp001-002.json"]:
         data = json.loads((SCRIPT_DIR / rel).read_text())
         ok, errors = validate_state(data, conf)
         assert ok, f"{rel}: {errors}"
@@ -491,8 +490,8 @@ def test_engineer_full_loop():
         assert decisions[4][1] == "done"
 
 
-def test_researcher_full_loop():
-    """Simulate researcher loop with failure-driven learning:
+def test_metric_loop_full_cycle():
+    """Simulate the metric loop with failure-driven learning:
     init -> work(fail) -> init(cycle back) -> work(succeed) -> done."""
     with tempfile.TemporaryDirectory() as tmp:
         conf = load_conf(make_mode_dir(tmp, "metric"))
@@ -627,7 +626,7 @@ def test_loop_decides_next_prompt():
         assert phase == "done"
 
 
-def test_loop_decides_researcher_prompt():
+def test_loop_decides_metric_prompt():
     """Researcher mode: state determines theorizer vs executor selection."""
     with tempfile.TemporaryDirectory() as tmp:
         mode_dir = make_mode_dir(tmp, "metric")
@@ -950,7 +949,7 @@ def test_shipped_mode_fails_when_the_evaluation_script_is_missing():
     script. A project without one cannot be scored, and must not read as
     scoring zero or as passing.
     """
-    conf = load_conf(SCRIPT_DIR / "modes" / "researcher")
+    conf = load_conf(SCRIPT_DIR / "modes" / "experiment")
     with tempfile.TemporaryDirectory() as tmp:
         result = run_verification(tmp, conf, verbose=False)
         assert result["verify"]["success"] is False
@@ -958,7 +957,7 @@ def test_shipped_mode_fails_when_the_evaluation_script_is_missing():
 
 
 def test_shipped_mode_scores_a_project_that_has_one():
-    conf = load_conf(SCRIPT_DIR / "modes" / "researcher")
+    conf = load_conf(SCRIPT_DIR / "modes" / "experiment")
     with tempfile.TemporaryDirectory() as tmp:
         (Path(tmp) / "run_backtest.py").write_text(
             'print("[Metric] Sharpe Ratio: 1.2345")\n')
