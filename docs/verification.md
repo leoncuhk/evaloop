@@ -114,7 +114,61 @@ The strategist prompt still runs on `--orient-interval`, but it is now handed
 `.state/orient.md` — the conclusion — rather than left to infer it from raw
 state. Orient is arithmetic; Decide is judgement.
 
-### 5. What this runs on your machine
+### 5. What the final number is evidence of
+
+The gate above settles whether a run may *stop*. It does not settle what the
+number it stopped on is worth, and in 7.5 it had two blind spots.
+
+**One held-out figure is one draw.** Compared directly against the target, a
+held-out point value that chance lifts over the line opens the gate. A scorer
+can now print the samples its metric is made of:
+
+```
+[Metric] Accuracy: 0.812
+[Sample] fold 1: 0.79
+[Sample] fold 2: 0.84
+…
+```
+
+Records then carry `samples` and `lower_bound`, and the gate judges the one-sided
+95% lower bound of their mean (Student *t*, standard library only). Without
+samples it judges the point value against `target + held_out_margin`, and every
+report labels that basis "single value; no uncertainty reported".
+
+**The stopping time is selected on the held-out split.** The gate is consulted
+every session and the run stops the first time it opens. The agent never sees
+the number, so the search is not steered; but *when* the run stops is chosen by
+that split, and the figure at the stop is the best of a noisy series. Reusing a
+split to decide spends it. So a third split — `confirm_verify_command`, read
+from the sealed file only — is run exactly once, when a run stops because the
+gate opened (or on `run.py evidence --confirm`). Its record is written beside
+the sealed config and never overwritten; a second request reports it as spent.
+
+**The verdict.** Every loop ends, and `run.py evidence` reports, one of:
+
+| Verdict | Meaning |
+|---|---|
+| `no target` | nothing to judge against |
+| `no held-out measurement` | every number describes the segment being optimised |
+| `not transferred` | visible target met, held-out not |
+| `below target` | held-out below target |
+| `unconfirmed` | held-out gate open; that figure was selected by the stopping time |
+| `not confirmed` | the once-read confirmation does not clear the target |
+| `confirmed` | the once-read confirmation clears it too |
+
+Each report also lists how many times the held-out split was consulted, which
+measurements were discredited and why, and what is not established: construct
+validity. `--json` emits the same record for other tools — a promotion gate, a
+release checklist — to consume.
+
+**Held-out data placement.** Sealing the command does not seal the data it
+reads. The sealed file may declare `hidden_data=` paths; `verify`, `loop` and
+`evidence` refuse to run if any of them resolves inside the project. That checks
+placement only. Whether another path is readable is a sandbox question.
+
+A worked case: [empirical-record.md#noise-at-the-gate](empirical-record.md#noise-at-the-gate).
+
+### 6. What this runs on your machine
 
 `run.py loop` starts an agent **with permissions bypassed** — `bypassPermissions`
 on the SDK path, `--dangerously-skip-permissions` on the CLI path. That is
@@ -143,7 +197,7 @@ The Orient phase is the one exception: it runs with `disallowed_tools=["Bash",
 "Write"]` and a hook restricting `Edit` to `.state/`, because a strategist that
 can modify code is a strategist that can break the build between sessions.
 
-### 6. Budget & stuck controls
+### 7. Budget & stuck controls
 
 - **Circuit breaker**: stops after N consecutive sessions with no progress
 - **Budget cap**: `--max-budget` prevents runaway spending

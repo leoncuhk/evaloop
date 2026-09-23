@@ -1125,6 +1125,156 @@ def test_a_sealed_run_writes_nothing_readable_into_the_project():
 
 
 # ═══════════════════════════════════════════
+# Uncertainty, the once-read confirmation, and the evidence verdict
+# ═══════════════════════════════════════════
+
+from evidence import (confirm_once, confirmation_path, evidence,
+                      misplaced_hidden_data, render)
+
+
+def test_a_noisy_held_out_pass_does_not_open_the_gate():
+    """quant-lab's own held-out split: point Sharpe 1.67 over a 1.5 target, but
+    its five blocks range from -3.6 to 7.6. The lower bound is far below."""
+    with tempfile.TemporaryDirectory() as tmp:
+        conf = load_conf(make_mode_dir(tmp, "metric"))
+        samples = [-3.109, 7.6214, -3.5798, 1.7261, -2.3879]
+        from core import lower_bound
+        path = _lab(tmp, 1.9, 1.5, [{"session": "1", "metric": 1.6689,
+                                     "samples": samples,
+                                     "lower_bound": lower_bound(samples)}])
+        assert get_phase(path, conf) == "init"
+
+
+def test_the_margin_raises_the_bar_for_a_point_value():
+    with tempfile.TemporaryDirectory() as tmp:
+        conf = dict(load_conf(make_mode_dir(tmp, "metric")), held_out_margin="0.3")
+        path = _lab(tmp, 1.9, 1.5, [{"session": "1", "metric": 1.7}])
+        assert get_phase(path, conf) == "init"
+        conf["held_out_margin"] = "0.1"
+        assert get_phase(path, conf) == "done"
+
+
+def test_run_verification_records_samples_and_their_lower_bound():
+    with tempfile.TemporaryDirectory() as tmp:
+        py = sys.executable
+        Path(tmp, ".state").mkdir()
+        conf = {"hidden_verify_command":
+                f"{py} -c \"print('[Metric] m: 2.0'); print('[Sample] a: 1.0'); "
+                f"print('[Sample] b: 3.0')\""}
+        run_verification(tmp, conf, session_label="s1", verbose=False)
+        rec = json.loads((Path(tmp) / ".state" / "hidden_metrics.json").read_text())[0]
+        assert rec["samples"] == [1.0, 3.0]
+        assert rec["lower_bound"] < 2.0
+
+
+def _sealed_project(tmp, confirm_value, target=1.5, held_out=1.7, visible=1.9):
+    project = Path(tmp) / "proj"
+    (project / ".state").mkdir(parents=True)
+    (project / ".state" / "journal.json").write_text(json.dumps(
+        {"experiments": [], "best_metric": visible, "target_metric": target}))
+    ops = Path(tmp) / "ops"
+    ops.mkdir()
+    sealed = ops / "task.conf"
+    counter = ops / "runs.txt"
+    sealed.write_text(
+        f"confirm_verify_command={sys.executable} -c \"open('{counter}','a').write('x');"
+        f"print('[Metric] c: {confirm_value}')\"\nmetric_pattern=[Metric] c:\n")
+    hidden_metrics_path(project, sealed).write_text(json.dumps(
+        [{"session": "1", "metric": held_out}]))
+    return project, sealed, counter
+
+
+def test_the_confirmation_split_is_read_exactly_once():
+    with tempfile.TemporaryDirectory() as tmp:
+        project, sealed, counter = _sealed_project(tmp, 1.8)
+        conf = load_conf(make_mode_dir(tmp, "metric"))
+        first = confirm_once(project, conf, sealed, verbose=False)
+        second = confirm_once(project, conf, sealed, verbose=False)
+        assert first["metric"] == 1.8 and first["spent"] is False
+        assert second["spent"] is True
+        assert counter.read_text() == "x", "the command must run once, not twice"
+        assert confirmation_path(project, sealed).parent == sealed.parent
+
+
+def test_confirmation_is_read_only_from_the_sealed_file():
+    with tempfile.TemporaryDirectory() as tmp:
+        conf = {"confirm_verify_command": "echo '[Metric] c: 9'"}
+        assert confirm_once(Path(tmp), conf, None, verbose=False) is None
+
+
+def test_evidence_verdicts_run_from_weakest_to_strongest():
+    with tempfile.TemporaryDirectory() as tmp:
+        conf = load_conf(make_mode_dir(tmp, "metric"))
+        project, sealed, _ = _sealed_project(tmp, 1.8)
+        assert evidence(project, conf, sealed)["verdict"] == "unconfirmed"
+        confirm_once(project, conf, sealed, verbose=False)
+        ev = evidence(project, conf, sealed)
+        assert ev["verdict"] == "confirmed" and ev["held_out_queries"] == 1
+        assert "construct validity" in ev["not_established"]
+    with tempfile.TemporaryDirectory() as tmp:
+        conf = load_conf(make_mode_dir(tmp, "metric"))
+        project, sealed, _ = _sealed_project(tmp, 0.06)
+        confirm_once(project, conf, sealed, verbose=False)
+        assert evidence(project, conf, sealed)["verdict"] == "not confirmed"
+    with tempfile.TemporaryDirectory() as tmp:
+        conf = load_conf(make_mode_dir(tmp, "metric"))
+        project, sealed, _ = _sealed_project(tmp, 1.8, held_out=-0.03)
+        ev = evidence(project, conf, sealed)
+        assert ev["verdict"] == "not transferred"
+        assert render(ev)[0].startswith("Evidence: NOT TRANSFERRED")
+
+
+def test_evidence_lists_discredited_measurements():
+    with tempfile.TemporaryDirectory() as tmp:
+        conf = load_conf(make_mode_dir(tmp, "metric"))
+        path = _lab(tmp, 1.9, 1.5, [{"session": "1", "metric": 9.9,
+                                     "tampered": ["score.py"]}])
+        ev = evidence(path.parent.parent, conf, None)
+        assert ev["verdict"] == "no held-out measurement"
+        assert ev["discredited"][0]["tampered"] == ["score.py"]
+        assert ev["held_out_queries"] == 1
+
+
+def test_held_out_data_declared_inside_the_project_is_refused():
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp) / "proj"
+        project.mkdir()
+        sealed = Path(tmp) / "task.conf"
+        sealed.write_text(f"hidden_data=data/test.csv,{tmp}/outside.csv\n")
+        inside = misplaced_hidden_data(project, sealed)
+        assert inside == [str((project / "data" / "test.csv").resolve())]
+        assert misplaced_hidden_data(project, None) == []
+
+
+def test_cli_evidence_confirms_once_and_reports():
+    import subprocess
+    with tempfile.TemporaryDirectory() as tmp:
+        project, sealed, counter = _sealed_project(tmp, 1.8)
+        cmd = [sys.executable, str(SCRIPT_DIR / "run.py"), "evidence", str(project),
+               "--sealed-verify", str(sealed)]
+        before = subprocess.run(cmd, capture_output=True, text=True)
+        assert "UNCONFIRMED" in before.stdout and before.returncode == 0
+        after = subprocess.run(cmd + ["--confirm"], capture_output=True, text=True)
+        assert "CONFIRMED" in after.stdout and "UNCONFIRMED" not in after.stdout
+        again = subprocess.run(cmd + ["--confirm", "--json"], capture_output=True, text=True)
+        assert json.loads(again.stdout)["verdict"] == "confirmed"
+        assert counter.read_text() == "x"
+
+
+def test_cli_refuses_held_out_data_inside_the_project():
+    import subprocess
+    with tempfile.TemporaryDirectory() as tmp:
+        project = Path(tmp) / "proj"
+        project.mkdir()
+        sealed = Path(tmp) / "task.conf"
+        sealed.write_text("hidden_data=holdout.csv\n")
+        r = subprocess.run([sys.executable, str(SCRIPT_DIR / "run.py"), "verify",
+                            str(project), "--sealed-verify", str(sealed)],
+                           capture_output=True, text=True)
+        assert r.returncode != 0 and "inside the" in r.stderr
+
+
+# ═══════════════════════════════════════════
 # Runner
 # ═══════════════════════════════════════════
 

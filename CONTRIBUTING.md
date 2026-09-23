@@ -61,7 +61,14 @@ verify_timeout=300
 
 # Better placed in a sealed file outside the project. See docs/verification.md.
 hidden_verify_command=your-held-out-command
+held_out_margin=0.0
 ```
+
+Two keys are read from the sealed file only, because a version the agent could
+edit would defend nothing: `confirm_verify_command` (a third split, read once
+after the run stops) and `hidden_data` (held-out data paths, refused if they sit
+inside the project). A scorer that prints `[Sample] <label>: <number>` lines is
+judged on the lower confidence bound of their mean.
 
 Then `prompts/<name>.md` for each phase you named, and:
 
@@ -89,11 +96,14 @@ into `.state/history/`, never deleting them.
 **Tests prove behaviour without an LLM.** Every check in `tests/` runs offline.
 Behaviour that needs a live model belongs in `bench/`.
 
-**The engine stays small.** CI fails the build if `run.py` exceeds 660 lines or
-`core.py` exceeds 600. Raise a budget only when the code that pushed it past is
-worth more than the constraint, and say so in the commit.
+**The engine stays small.** CI fails the build if `run.py` exceeds 700 lines,
+`core.py` 650, or `evidence.py` 250. Raise a budget only when the code that
+pushed it past is worth more than the constraint, and say so in the commit.
+7.6 raised the first two (from 660 and 600) for the lower-bound gate and the
+evidence verdict, and put the new logic in its own module rather than growing
+`core.py` further.
 
-**Standard library only** in `core.py` and `run.py`. `claude-agent-sdk` is
+**Standard library only** in `core.py`, `evidence.py` and `run.py`. `claude-agent-sdk` is
 optional and imported behind a try/except.
 
 ## Before opening a PR
@@ -101,6 +111,7 @@ optional and imported behind a try/except.
 ```bash
 python3 -c "import ast; ast.parse(open('run.py').read())"
 python3 -c "import ast; ast.parse(open('core.py').read())"
+python3 -c "import ast; ast.parse(open('evidence.py').read())"
 python3 tests/test_run.py && python3 tests/test_integration.py
 python3 run.py loop --simulate --pause 0 examples/tamper-demo | grep TAMPERED
 ```

@@ -108,6 +108,44 @@ def test_phase_invalid_json():
         assert get_phase(Path(f.name), {}) == "init"
 
 
+
+# ═══════════════════════════════════════════
+# samples and the lower confidence bound
+# ═══════════════════════════════════════════
+
+from core import lower_bound, parse_samples, gate_value
+
+
+def test_parse_samples_reads_every_sample_line_in_order():
+    out = "[Metric] Sharpe: 1.2\n[Sample] block 1: 0.5\n[Sample] block 2: -1e-1\n"
+    assert parse_samples(out) == [0.5, -0.1]
+
+
+def test_sample_lines_do_not_change_the_metric():
+    from core import parse_metric
+    out = "[Sample] block 1: 9.0\n[Metric] Sharpe: 1.2\n"
+    assert parse_metric(out) == 1.2
+
+def test_lower_bound_needs_two_samples():
+    assert lower_bound([]) is None and lower_bound([1.0]) is None
+
+
+def test_lower_bound_matches_the_t_interval():
+    # mean 2, sd 1, n 4: 2 - 2.353 * 1 / 2
+    assert abs(lower_bound([1.0, 2.0, 3.0, 2.0]) - (2 - 2.353 * (2 / 3) ** 0.5 / 2)) < 1e-9
+
+
+def test_lower_bound_uses_the_normal_value_beyond_the_table():
+    xs = [0.0, 1.0] * 20
+    mean, sd = 0.5, (sum((x - 0.5) ** 2 for x in xs) / 39) ** 0.5
+    assert abs(lower_bound(xs) - (mean - 1.645 * sd / 40 ** 0.5)) < 1e-9
+
+
+def test_gate_value_prefers_the_lower_bound():
+    assert gate_value({"metric": 1.7, "lower_bound": 0.2}) == 0.2
+    assert gate_value({"metric": 1.7}) == 1.7
+
+
 if __name__ == "__main__":
     tests = [n for n in sorted(dir()) if n.startswith("test_")]
     passed = failed = 0

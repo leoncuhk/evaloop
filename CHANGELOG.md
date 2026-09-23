@@ -1,8 +1,40 @@
 # Changelog
 
-## [Unreleased]
+## [7.6.0] — 2026-09-24
+
+A run's number is now reported with its standing. 7.5 made the held-out metric
+decide when a run is done; this release asks what the number it stopped on is
+evidence of.
+
+### Added
+- **A verdict at the end of every run, and `run.py evidence`.** From `no
+  held-out measurement` through `not transferred`, `unconfirmed` and `not
+  confirmed` to `confirmed`, with how often the held-out split was consulted,
+  which measurements were discredited and why, and — always — that construct
+  validity is not established. `--json` emits the record for other tools to
+  gate on. `status` prints the verdict line
+- **A confirmation split read once.** The run stops the first time the held-out
+  gate opens, so the held-out figure at the stop was selected by the stopping
+  time. `confirm_verify_command`, read from the sealed file only, runs once when
+  a run stops because the gate opened, or on `evidence --confirm`; its record is
+  written beside the sealed config and a second request reports it spent
+- **A lower-bound gate.** A scorer that prints `[Sample] <label>: <number>`
+  lines is judged on the one-sided 95% lower bound of their mean (Student *t*,
+  standard library). Without samples, a point value must clear
+  `target + held_out_margin`
+- **Held-out data placement check.** `hidden_data=` paths in the sealed file are
+  refused by `verify`, `loop` and `evidence` if they resolve inside the project
+- **`examples/quant-lab` gains `--split confirm` and `--blocks N`.** Its
+  baseline strategy scores 1.67 on the held-out split against a 1.5 target and
+  0.06 on the confirmation split: [docs/empirical-record.md](docs/empirical-record.md#noise-at-the-gate)
 
 ### Changed
+- **An agent saying it is complete no longer reads as completion.** The loop
+  used to print "Agent confirmed complete!" on the agent's own signal. It now
+  says the agent claims completion and lets the evidence verdict decide
+- **Size budgets** raised to 700 (`run.py`) and 650 (`core.py`); new logic went
+  into `evidence.py` (budget 250) rather than growing `core.py` further. README
+  now says about 1,500 lines, which was already closer to true than "under 1000"
 - **Agent instructions are `AGENTS.md`, not `CLAUDE.md`.** The repository
   instructions and the `modes/experiment` template are renamed, and the engine
   now writes the mode template to `<project>/AGENTS.md`. Claude Code (2.1.277+)

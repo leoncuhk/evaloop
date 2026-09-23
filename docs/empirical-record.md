@@ -47,6 +47,41 @@ magnitude did not", because the held-out figure had moved from −1.1125 to
 folds moving the other way: the direction did not transfer either. The fold this
 project had been reasoning from is also the worst held-out fold in the study.
 
+### Noise at the gate
+
+`examples/quant-lab` with its shipped baseline strategy — no optimisation at
+all — and a 1.5 Sharpe target. Every figure below is deterministic (seeded) and
+reproducible:
+
+```bash
+D=$(mktemp -d); mkdir -p $D/ql/.state
+cp examples/quant-lab/{hypothesis.md,run_backtest.py,strategies.py} $D/ql/
+# the train-split figure, written to the journal as a loop would
+echo '{"experiments": [], "best_metric": 1.9644, "target_metric": 1.5}' > $D/ql/.state/journal.json
+printf 'hidden_verify_command=python3 run_backtest.py --split test\nconfirm_verify_command=python3 run_backtest.py --split confirm\n' > $D/task.conf
+python3 run.py verify   $D/ql --sealed-verify $D/task.conf
+python3 run.py evidence $D/ql --sealed-verify $D/task.conf --confirm
+```
+
+| Reading | Figure | What the gate made of it |
+|---|---|---|
+| Train split (visible) | 1.9644 | clears 1.5 |
+| Held-out split, point value | 1.6689 | clears 1.5 — the gate opens and a loop would stop here |
+| Held-out split, five 30-day blocks (`--blocks 5`) | −3.11, 7.62, −3.58, 1.73, −2.39 | 95% lower bound −4.45: `NOT TRANSFERRED` |
+| Confirmation split, read once | 0.0596 | `NOT CONFIRMED` |
+
+The point value passes and the strategy has no edge: a third draw from the same
+process scores 0.06. Nothing misbehaved; one held-out number was simply lucky.
+Either added control catches it — the lower bound because the blocks disagree
+wildly, the confirmation because it is a fresh draw nobody selected on.
+
+Caveats. The data are synthetic. The mean of per-block Sharpe ratios (0.05) is
+not the full-sample Sharpe (1.67), so the lower bound here is on a related
+quantity, not the same one; a scorer should print samples whose mean *is* its
+metric — per-fold scores, per-item accuracies — and Sharpe blocks only
+approximate that. This demonstrates the mechanism on one case. It is not a
+measurement of how often point-value gates mislead.
+
 ### What those numbers do not show
 
 - **The qlib sweep selected on the segment it scored on.** `--split train` maps

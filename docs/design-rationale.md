@@ -129,7 +129,7 @@ almost exactly, including where the controls do not reach:
 | Variant | What goes wrong | What catches it here |
 |---|---|---|
 | **Adversarial** | An agent with its own goals exploits the metric | `--sealed-verify`, scoring fingerprints, leak detection |
-| **Regressional** | Selecting on a noisy proxy selects the noise. No bad behaviour required | The held-out metric and its gate |
+| **Regressional** | Selecting on a noisy proxy selects the noise. No bad behaviour required | The held-out gate on a lower confidence bound, and a confirmation split read once |
 | **Extremal** | Optimisation walks into a regime where the proxy no longer tracks the goal | The held-out metric, when the held-out data comes from that other regime |
 | **Causal** | You intervene on a correlate that was never causally upstream | **Nothing here.** evaloop cannot tell you the metric measures the wrong thing |
 
@@ -143,6 +143,39 @@ The second is that causal Goodhart is untouched and probably untouchable by
 tooling. If your metric is the wrong thing to measure, a held-out sample of the
 wrong thing will agree with the visible sample of the wrong thing. Choosing what
 to measure remains a human judgement, and no part of this harness helps with it.
+What it can do is say so: every evidence verdict names construct validity as not
+established, so the report cannot be read as more than it is.
+
+### Regressional Goodhart reaches the held-out split too
+
+Until 7.6 the held-out gate compared one number with the target, after every
+session, and let the run stop the first time it cleared. That is regressional
+Goodhart one level up. The agent is not selecting on the held-out split, but the
+stopping rule is: over enough sessions, noise alone carries a point value over
+the line, and the run stops exactly then. Two alternatives were considered and
+rejected:
+
+- **Limit how often the held-out split is consulted.** Reusable-holdout schemes
+  (thresholdout and its relatives) bound the leakage, but they add noise to the
+  answers and a budget the operator has to tune, and they still leave the
+  stopping figure selected.
+- **Report the held-out maximum with a correction.** Correcting a maximum needs
+  a model of the series; a harness this size should not guess one.
+
+What 7.6 does instead is cheap and needs no model: judge a lower bound when the
+scorer can say how noisy it is, and settle the final claim on a split that is
+read once, after the decision, so nothing was conditioned on it. The price is a
+third split. For many tasks that is the right price; where data is too scarce
+for three, the verdict stays `unconfirmed` and says why.
+
+### The verdict is the product
+
+A loop's metric is an input to someone else's decision: whether to keep a
+change, ship it, promote a harness. What that decision needs is not the number
+but its standing — intact, unselected, transferred, or not. `run.py evidence
+--json` is that standing as a record another tool can gate on, and it is where
+this project meets the question it cannot answer by itself: whether the metric
+is valid for the decision at all.
 
 ### Single loop, double loop
 

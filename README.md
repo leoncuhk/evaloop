@@ -10,11 +10,28 @@ that produces the number. Left alone, a long loop optimises the measurement
 rather than the work, and reports success. This harness keeps the measurement
 alive under that pressure: verification the orchestrator runs, a held-out metric
 the agent never sees, a scoring definition it cannot reach or rewrite, and a
-record of which numbers are trustworthy. Under 1000 lines of Python, nothing
+record of which numbers are trustworthy. About 1,500 lines of Python, nothing
 outside the standard library, no Docker.
 
 > **The claim, stated narrowly**: a loop can only run unattended for as long as
 > its metric survives its own optimiser. Everything here exists to extend that.
+
+## What it is for
+
+A number an optimiser consumes is evidence of improvement only if three things
+hold, and none of them is visible in the number itself:
+
+1. **It is intact.** The optimiser did not change how it is computed.
+2. **It is not selected.** The figure you report was not picked, by you or by
+   the loop, from many noisy readings of the same data.
+3. **It transfers.** It holds on data the optimisation never touched.
+
+evaloop checks each of these mechanically and ends every run with a verdict
+stated at the strength the records support — from `not transferred` up to
+`confirmed` — instead of a metric. A fourth condition, that the metric measures
+what you actually care about (construct validity), no tool can check for you;
+every verdict says so. That question belongs to measurement research, and this
+is the instrument such research runs its experiments through.
 
 ## Is this for you?
 
@@ -122,8 +139,8 @@ python run.py loop my-lab --sealed-verify ~/task.conf
 
 ## How it works
 
-Four things happen around every session. Each is one paragraph here and a
-section in [docs/verification.md](docs/verification.md).
+Five things happen around every session and at the end of a run. Each is one
+paragraph here and a section in [docs/verification.md](docs/verification.md).
 
 **The orchestrator runs the scoring.** `verify_command` is executed by evaloop,
 not reported by the agent. Configured in `mode.conf`, or per project in
@@ -155,6 +172,25 @@ Orient: visible 3.6430 meets the target and held-out -0.0297 does not:
 
 Those are real figures from [`examples/qlib-quant`](docs/empirical-record.md).
 Under the old rule that run reports success.
+
+**The run ends with a verdict, not a number.** A single held-out figure is one
+noisy draw, and a loop that consults it every session and stops the first time
+it clears the target has selected its stopping point on that draw. So the gate
+judges a lower confidence bound when the scorer prints the samples its metric is
+made of (`[Sample]` lines), and a `held_out_margin` otherwise. And a third split,
+`confirm_verify_command` in the sealed file, is read exactly once after the run
+stops. `python run.py evidence <project>` reports which of these the run passed:
+
+```
+Evidence: NOT CONFIRMED — held-out cleared the gate; the unselected confirmation did not
+  target: 1.5 | visible: 1.9644
+  held-out: 1.6689 (judged on 1.6689, single value; no uncertainty reported); consulted 1 time(s)
+  confirmation: 0.0596 (judged on 0.0596, single value; no uncertainty reported), read once at …
+  not established: construct validity: whether the metric measures what you care about. …
+```
+
+That is `examples/quant-lab` with its baseline strategy, reproducible in three
+commands — [docs/empirical-record.md](docs/empirical-record.md#noise-at-the-gate).
 
 > **What this runs on your machine.** `run.py loop` starts an agent with
 > permissions bypassed, and the safety hook is a substring blocklist that stops
@@ -204,9 +240,10 @@ vocabulary — and knows nothing about the shipped names. See
 ```
 evaloop/
 ├── run.py              # CLI and the optional session loop
-├── core.py             # verification, scoring integrity, state, metrics
+├── core.py             # verification, scoring integrity, gate, state, metrics
+├── evidence.py         # once-read confirmation, verdict, held-out data placement
 ├── modes/experiment/   # the one bundled loop; --mode also takes a path
-├── tests/              # 93 tests, run by CI on 3.10 / 3.11 / 3.12
+├── tests/              # 109 tests, run by CI on 3.10 / 3.11 / 3.12
 ├── bench/              # does an agent get around the controls? (live sessions)
 ├── docs/               # verification, empirical record, design rationale, archive
 ├── assets/             # diagrams
@@ -243,6 +280,9 @@ this repository's own earlier readings were wrong:
 python run.py verify  <project> [--sealed-verify FILE]   # score only, no LLM
 python run.py loop    <project> [--sealed-verify FILE] [options]
 python run.py status  <project>                          # phase and progress
+python run.py evidence <project> [--sealed-verify FILE] [--confirm] [--json]
+                                                         # verdict; --confirm reads the
+                                                         # confirmation split, once
 python run.py list-modes                                 # modes found in modes/
 python run.py <project> [options]                        # backward compat → loop
 
@@ -259,6 +299,18 @@ python run.py <project> [options]                        # backward compat → l
 `verify_timeout` (seconds, default 300) is set in `mode.conf`, `.verify`, or the
 sealed file — a full model fit outlives a test suite. A timeout is a failed
 check, never a metric.
+
+| Scoring key | Where | Meaning |
+|---|---|---|
+| `verify_command` | mode, `.verify`, sealed | the metric the loop optimises |
+| `hidden_verify_command` | sealed (preferably) | the held-out metric the agent never sees |
+| `held_out_margin` | mode, `.verify`, sealed | how far above target a held-out point value must be |
+| `confirm_verify_command` | **sealed only** | a third split, read once after the run stops |
+| `hidden_data` | **sealed only** | held-out data paths; refused if inside the project |
+
+A scorer that prints `[Sample] <label>: <number>` lines alongside its metric —
+one per fold, window or item, whose mean is the metric — is judged on the
+one-sided 95% lower bound of their mean instead of on the point value.
 | `--max-budget` | `10.0` | Maximum cost in USD |
 | `--orient-interval` | `10` | Strategic review interval |
 | `--review-interval` | `5` | Tactical review every N sessions |
@@ -276,7 +328,7 @@ Three families of tools sit near this one. They solve adjacent problems, and for
 
 **Evolutionary program search** — [AlphaEvolve](https://deepmind.google), [OpenEvolve](https://github.com/codelion/openevolve), [ShinkaEvolve](https://github.com/SakanaAI/ShinkaEvolve). Here the evaluator genuinely is a separate program, with cascade evaluation to prune cheap failures early — architecturally the nearest relative. The community's own guidance is that you must hand-design an unhackable evaluator, because the search will find every loophole in it. **Use them for**: optimising a well-specified objective over many thousands of candidates. **What they don't do**: give you the unhackable evaluator. That is left to you.
 
-**Where this project fits.** It is the small piece those three leave out: a scoring definition the agent cannot reach or rewrite, carried across sessions, with the out-of-sample number withheld by construction rather than by instruction. It is roughly 1000 lines with no dependencies, so it wraps whatever agent you already run instead of replacing it.
+**Where this project fits.** It is the small piece those three leave out: a scoring definition the agent cannot reach or rewrite, carried across sessions, with the out-of-sample number withheld by construction rather than by instruction, and a verdict on what the final number is evidence of. It is about 1,500 lines with no dependencies, so it wraps whatever agent you already run instead of replacing it.
 
 **When not to use it.** If your metric is a fixed test suite the agent cannot edit, `verify_command` adds little over running the tests. If you need dashboards, tracing, or dataset management, use a real eval platform. If you need hard isolation against an adversarial agent, you need a sandbox — this gives you sealing and detection, not containment.
 
@@ -288,7 +340,7 @@ partitions this project's controls, including where they stop:
 | Variant | What goes wrong | Caught by |
 |---|---|---|
 | **Adversarial** | An agent exploits the metric | sealing, fingerprints, leak detection |
-| **Regressional** | Selecting on a noisy proxy selects the noise — no misbehaviour required | the held-out metric and its gate |
+| **Regressional** | Selecting on a noisy proxy selects the noise — no misbehaviour required | the held-out gate on a lower bound, and a confirmation split read once |
 | **Extremal** | Optimisation walks into a regime where the proxy stops tracking the goal | the held-out metric, if the held-out data is from that regime |
 | **Causal** | You intervened on a correlate that was never causally upstream | **nothing here** |
 
@@ -333,6 +385,9 @@ These address the [six failure modes](https://arxiv.org/abs/2601.03315) of auton
 | Sealed scoring config | Evaluator capture — the agent cannot redefine its own metric |
 | Scoring fingerprints | Reward hacking — a rewritten scorer marks the metric untrusted |
 | Leak detection | Silent contamination — hidden-metric leaks are recorded with the metric |
+| Lower-bound gate | Noise — one lucky held-out draw cannot end the run |
+| Once-read confirmation | Selection by stopping time — the reported figure was chosen by nothing |
+| Evidence verdict | Overclaiming — a run reports what its records support, and what they do not |
 
 ## Prerequisites
 

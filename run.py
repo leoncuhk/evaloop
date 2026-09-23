@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-evaloop v7.5.0 — Evaluation-Driven Autonomous Development
+evaloop v7.6.0 — Evaluation-Driven Autonomous Development
 
 For loops whose acceptance criterion is a metric rather than a test suite.
 The orchestrator scores the work, keeps a held-out metric the agent never sees,
@@ -10,11 +10,13 @@ Usage:
   python run.py verify <project-dir> [--sealed-verify FILE]   # score only, no LLM
   python run.py loop <project-dir> [--sealed-verify FILE]     # session loop + scoring
   python run.py status <project-dir>                          # show phase/progress
+  python run.py evidence <project-dir> [--sealed-verify FILE] [--confirm] [--json]
 
 Scoring integrity: --sealed-verify FILE keeps the scoring definition outside the
 project, so an agent that rewrites .verify changes nothing. In-project scoring
 files are fingerprinted around each session, and transcripts are scanned for
-hidden-metric leaks.
+hidden-metric leaks. A run ends with an evidence verdict, not a metric: whether
+the held-out gate opened, and whether a confirmation split read once agrees.
 """
 
 import asyncio
@@ -25,7 +27,7 @@ from datetime import datetime
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
-VERSION = "7.5.0"
+VERSION = "7.6.0"
 COMPLETE_SIGNAL = "<promise>COMPLETE</promise>"
 DEFAULT_MODE = "experiment"
 
@@ -34,6 +36,7 @@ from core import (
     resolve_verify_cmd, safe_read_state, scoring_fingerprint,
     fingerprint_diff, validate_state, divergence_report,
 )
+from evidence import confirm_once, evidence, misplaced_hidden_data, render
 
 _sdk_available = False
 try:
@@ -272,6 +275,22 @@ def _is_inside(path: Path, parent: Path) -> bool:
         return False
 
 
+def _resolve_sealed(args, project: Path):
+    """The sealed config, refused unless it and the held-out data it declares
+    sit outside the project the agent can write to."""
+    sealed = Path(args.sealed_verify).resolve() if getattr(args, "sealed_verify", None) else None
+    if sealed and not sealed.is_file():
+        sys.exit(f"Sealed verification file not found: {sealed}")
+    if sealed and _is_inside(sealed, project):
+        sys.exit(f"Sealed verification file must live outside the project "
+                 f"the agent can write to: {sealed}")
+    inside = misplaced_hidden_data(project, sealed)
+    if inside:
+        sys.exit("Held-out data declared in the sealed file sits inside the "
+                 f"project, where the agent can read it: {', '.join(inside)}")
+    return sealed
+
+
 def _write_orient_brief(project: Path, orient: dict) -> None:
     """Hand the strategist a conclusion, not a pile of state.
 
@@ -353,12 +372,7 @@ async def engine(args):
             dst.write_text(template)
             print(f"  Refreshed AGENTS.md from the {mode_dir.name} mode template")
 
-    sealed = Path(args.sealed_verify).resolve() if getattr(args, "sealed_verify", None) else None
-    if sealed and not sealed.is_file():
-        sys.exit(f"Sealed verification file not found: {sealed}")
-    if sealed and _is_inside(sealed, project):
-        sys.exit(f"Sealed verification file must live outside the project "
-                 f"the agent can write to: {sealed}")
+    sealed = _resolve_sealed(args, project)
     if sealed:
         print(f"  Sealed scoring config: {sealed}")
 
@@ -375,7 +389,7 @@ async def engine(args):
     print(f"  Project: {project}\n")
 
     session, sessions_run, no_progress, total_cost = 0, 0, 0, 0.0
-    untrusted = 0
+    untrusted, reached_done = 0, False
 
     while True:
         session += 1
@@ -385,7 +399,8 @@ async def engine(args):
 
         phase = get_phase(state_path, conf, sealed)
         if phase == "done":
-            print(f"{lp}[{ts()}] All work complete!")
+            print(f"{lp}[{ts()}] Visible target met; the held-out gate did not refuse.")
+            reached_done = True
             break
 
         # ── OODA Orient ──
@@ -406,6 +421,7 @@ async def engine(args):
             phase = get_phase(state_path, conf, sealed)
             if phase == "done":
                 print(f"{lp}[{ts()}] Orient determined: complete!")
+                reached_done = True
                 break
 
         prev = progress_count(state_path, conf)
@@ -421,7 +437,7 @@ async def engine(args):
               f"${r['cost']:.4f} | {r['turns']} turns | total ${total_cost:.4f}")
 
         if r["complete"]:
-            print(f"{lp}[{ts()}] Agent confirmed complete!")
+            print(f"{lp}[{ts()}] Agent claims complete; the evidence below decides.")
             break
 
         if total_cost >= args.max_budget:
@@ -440,7 +456,7 @@ async def engine(args):
             total_cost += r["cost"]
             print(f"{lp}[{ts()}] Retry: {r['status']} | ${r['cost']:.4f}")
             if r["complete"]:
-                print(f"{lp}[{ts()}] Agent confirmed complete!")
+                print(f"{lp}[{ts()}] Agent claims complete; the evidence below decides.")
                 break
             if total_cost >= args.max_budget:
                 print(f"{lp}[{ts()}] Budget cap (${total_cost:.4f} >= "
@@ -498,6 +514,12 @@ async def engine(args):
     if untrusted:
         print(f"{lp}[{ts()}] {untrusted} session(s) rewrote their own scoring inputs. "
               f"Those metrics are not results.")
+    # The confirmation split is spent only on a run that stopped because the
+    # gate opened. A run cut short by budget or stagnation has nothing to confirm.
+    if reached_done or get_phase(state_path, conf, sealed) == "done":
+        confirm_once(project, conf, sealed)
+    for line in render(evidence(project, conf, sealed)):
+        print(f"{lp}[{ts()}] {line}")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -512,11 +534,7 @@ def cmd_verify(args):
     project = Path(args.project_dir).resolve()
     if not project.is_dir():
         sys.exit(f"Project directory not found: {project}")
-    sealed = Path(args.sealed_verify).resolve() if getattr(args, "sealed_verify", None) else None
-    if sealed and not sealed.is_file():
-        sys.exit(f"Sealed verification file not found: {sealed}")
-    if sealed and _is_inside(sealed, project):
-        sys.exit(f"Sealed verification file must live outside the project: {sealed}")
+    sealed = _resolve_sealed(args, project)
     print(f"  evaloop v{VERSION} verify | {args.mode}\n  Project: {project}")
     print(f"  Sealed scoring config: {sealed}\n" if sealed
           else "  Scoring config: mode.conf / project .verify (agent-writable)\n")
@@ -548,6 +566,22 @@ def cmd_status(args):
     print(f"  Entry:  {entry} {'(OK)' if (project / entry).exists() else '(MISSING)'}")
     print(f"  State:  {conf.get('state_file','tasks.json')} {'(OK)' if state_path.exists() else '(new)'}")
     print(f"  Prompt: {prompt_file.name} {'(OK)' if prompt_file.exists() else '(MISSING)'}")
+    print(f"  {render(evidence(project, conf, sealed))[0]}")
+
+
+def cmd_evidence(args):
+    """What the run's records support. `--confirm` spends the confirmation split."""
+    conf = load_conf(resolve_mode(args.mode))
+    project = Path(args.project_dir).resolve()
+    if not project.is_dir():
+        sys.exit(f"Project directory not found: {project}")
+    sealed = _resolve_sealed(args, project)
+    if args.confirm:
+        if confirm_once(project, conf, sealed, verbose=not args.json) is None:
+            sys.exit("No confirm_verify_command in a sealed file (--sealed-verify).")
+    ev = evidence(project, conf, sealed)
+    print(json.dumps(ev, indent=2) if args.json else "\n".join(render(ev)))
+    sys.exit(0 if ev["verdict"] in ("confirmed", "unconfirmed", "no target") else 1)
 
 
 def cmd_list_modes(_args):
@@ -586,6 +620,12 @@ def main():
     p_s = sub.add_parser("status", help="Show phase and progress")
     p_s.add_argument("project_dir"); _mode(p_s); _sealed(p_s)
 
+    p_e = sub.add_parser("evidence", help="What the records support (no LLM)")
+    p_e.add_argument("project_dir"); _mode(p_e); _sealed(p_e)
+    p_e.add_argument("--confirm", action="store_true",
+                     help="Read the sealed confirmation split, once per project")
+    p_e.add_argument("--json", action="store_true")
+
     sub.add_parser("list-modes", help="List available modes")
 
     p_l = sub.add_parser("loop", help="Run session loop with verification")
@@ -599,7 +639,7 @@ def main():
 
     # Backward compat: rewrite argv before parsing
     raw = sys.argv[1:]
-    subcommands = {"verify", "status", "list-modes", "loop"}
+    subcommands = {"verify", "status", "evidence", "list-modes", "loop"}
     if raw and raw[0] not in subcommands and raw[0] not in ("-h", "--help"):
         if "--list-modes" in raw:
             raw = ["list-modes"]
@@ -611,7 +651,8 @@ def main():
     if not args.command:
         return top.print_help()
 
-    dispatch = {"verify": cmd_verify, "status": cmd_status, "list-modes": cmd_list_modes}
+    dispatch = {"verify": cmd_verify, "status": cmd_status,
+                "evidence": cmd_evidence, "list-modes": cmd_list_modes}
     if args.command in dispatch:
         return dispatch[args.command](args)
     if args.command == "loop":

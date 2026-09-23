@@ -107,7 +107,41 @@ def trusted_hidden(path: Path) -> list:
             and not r.get("tampered") and not r.get("leaks")]
 
 
-def held_out_gate(path: Path, target) -> tuple:
+# One-sided 95% Student t critical values by degrees of freedom. Beyond 30 the
+# normal value is within 2% and is used instead. A table keeps the standard
+# library the only dependency.
+_T95 = [6.314, 2.920, 2.353, 2.132, 2.015, 1.943, 1.895, 1.860, 1.833, 1.812,
+        1.796, 1.782, 1.771, 1.761, 1.753, 1.746, 1.740, 1.734, 1.729, 1.725,
+        1.721, 1.717, 1.714, 1.711, 1.708, 1.706, 1.703, 1.701, 1.699, 1.697]
+
+
+def lower_bound(samples) -> float:
+    """One-sided 95% lower confidence bound on the mean of `samples`.
+
+    A held-out figure is itself a sample: one number from one split carries no
+    statement of how far chance alone could move it. When the scorer reports the
+    pieces the figure is made of — folds, windows, items — their spread says how
+    much of an apparent pass is noise. None when there are fewer than two.
+    """
+    xs = [x for x in (as_number(s) for s in samples or []) if x is not None]
+    if len(xs) < 2:
+        return None
+    n = len(xs)
+    mean = sum(xs) / n
+    sd = (sum((x - mean) ** 2 for x in xs) / (n - 1)) ** 0.5
+    t = _T95[n - 2] if n - 1 <= len(_T95) else 1.645
+    return mean - t * sd / n ** 0.5
+
+
+def gate_value(record: dict):
+    """The number a held-out record is judged by: its lower bound when the
+    scorer reported samples, otherwise the point value, which claims no
+    uncertainty and is labelled that way wherever it is reported."""
+    lb = as_number(record.get("lower_bound"))
+    return lb if lb is not None else as_number(record.get("metric"))
+
+
+def held_out_gate(path: Path, target, margin=0.0) -> tuple:
     """Whether the held-out metric permits declaring the work done.
 
     Returns (allowed, latest_value). The gate reads the *latest* clean record,
@@ -115,9 +149,15 @@ def held_out_gate(path: Path, target) -> tuple:
     segment — the exact move this project exists to prevent. The latest record
     describes the tree as it now stands, which is what would ship.
 
-    The gate can only ever withhold completion, never cause it. That asymmetry
-    is deliberate: it refuses a false victory without steering the search, since
-    the agent never sees this number either way.
+    A record passes when its gate value — the lower confidence bound if the
+    scorer reported samples, else the point value — clears `target + margin`.
+    Comparing a single noisy number against the target let a run stop on the
+    first session where chance carried the held-out figure over the line.
+
+    The gate can only ever withhold completion, never cause it. It does not
+    steer the search, since the agent never sees this number. It does choose
+    when the run stops, and that choice is itself selection on the held-out
+    segment; `evidence.confirm_once` is the measurement that is not selected.
     """
     target = as_number(target)
     if target is None:
@@ -129,8 +169,9 @@ def held_out_gate(path: Path, target) -> tuple:
         # command. Measurements that exist but are all discredited are the
         # opposite case: corrupting the record must not become a way through.
         return (not _hidden_records(path)), None
-    latest = as_number(records[-1].get("metric"))
-    return (latest >= target), latest
+    latest = records[-1]
+    return (gate_value(latest) >= target + (as_number(margin) or 0.0),
+            as_number(latest.get("metric")))
 
 
 def get_phase(state_path: Path, conf: dict, sealed: Path = None) -> str:
@@ -163,8 +204,10 @@ def get_phase(state_path: Path, conf: dict, sealed: Path = None) -> str:
         # The visible target is met. Before calling it done, ask the number the
         # agent never saw. Until 7.2 nothing did, so a run could report success
         # on a metric it had spent every session optimising.
+        project = state_path.parent.parent
         allowed, _ = held_out_gate(
-            hidden_metrics_path(state_path.parent.parent, sealed), target)
+            hidden_metrics_path(project, sealed), target,
+            resolve_verify_cmd(project, conf, "held_out_margin", sealed))
         return "done" if allowed else "init"
 
     if done_count == 0:
@@ -257,6 +300,18 @@ def parse_metric(output: str, pattern: str = ""):
     return float(m.group(1)) if m else None
 
 
+_SAMPLE_RE = re.compile(r"\[Sample\]\s+[^:\n]+:\s*" + _NUM)
+
+
+def parse_samples(output: str) -> list:
+    """Every `[Sample] <label>: <number>` line, in order.
+
+    The pieces a metric is aggregated from. They feed `lower_bound`; a scorer
+    that prints none is judged on its point value.
+    """
+    return [float(v) for v in _SAMPLE_RE.findall(output or "")]
+
+
 def run_verify_command(project_dir: str, command: str, timeout: int = 60,
                        metric_pattern: str = "") -> dict:
     """Run a verification command and return structured result."""
@@ -271,6 +326,7 @@ def run_verify_command(project_dir: str, command: str, timeout: int = 60,
             "stdout": result.stdout,
             "stderr": result.stderr,
             "metric": parse_metric(result.stdout, metric_pattern),
+            "samples": parse_samples(result.stdout),
         }
     except subprocess.TimeoutExpired:
         return {"success": False, "exit_code": -1, "stdout": "",
@@ -340,7 +396,9 @@ def divergence_report(state_path: Path, conf: dict, sealed: Path = None) -> dict
 
     if target is None:
         return report
-    allowed, _ = held_out_gate(metrics_path, target)
+    allowed, _ = held_out_gate(
+        metrics_path, target,
+        resolve_verify_cmd(state_path.parent.parent, conf, "held_out_margin", sealed))
     report["gate_open"] = allowed
 
     v, h = report["visible"], report["held_out"]
@@ -547,6 +605,9 @@ def run_verification(project_dir: str, conf: dict, session_label: str = "",
         record = {"session": session_label, "metric": hr.get("metric"),
                   "timestamp": datetime.now(timezone.utc).isoformat(),
                   "sealed": sealed is not None}
+        if hr.get("samples"):
+            record["samples"] = hr["samples"]
+            record["lower_bound"] = lower_bound(hr["samples"])
         if tampered:
             record["tampered"] = tampered
         if leaks:

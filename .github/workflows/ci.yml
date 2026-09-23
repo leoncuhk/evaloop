@@ -15,13 +15,14 @@ jobs:
         run: |
           python3 -c "import ast; ast.parse(open('run.py').read())"
           python3 -c "import ast; ast.parse(open('core.py').read())"
+          python3 -c "import ast; ast.parse(open('evidence.py').read())"
       # AGENTS.md states a size budget. A stated constraint nothing checks is
       # the same class of problem as a documented protection nothing wires in.
       - name: Size budget
         run: |
           python3 - <<'EOF'
           import sys
-          budgets = {"run.py": 660, "core.py": 600}
+          budgets = {"run.py": 700, "core.py": 650, "evidence.py": 250}
           over = []
           for name, limit in budgets.items():
               n = sum(1 for _ in open(name))
@@ -74,3 +75,4 @@ jobs:
             | tee /tmp/tamper.out
           grep -q "TAMPERED" /tmp/tamper.out
           grep -q "Those metrics are not results" /tmp/tamper.out
+          grep -q "Evidence:" /tmp/tamper.out

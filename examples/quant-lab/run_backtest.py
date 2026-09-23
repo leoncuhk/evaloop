@@ -8,6 +8,11 @@ Supports train/test split for hidden out-of-sample verification:
   python run_backtest.py              # all data (default)
   python run_backtest.py --split train  # first 70% (visible to LLM)
   python run_backtest.py --split test   # last 30% (hidden from LLM)
+  python run_backtest.py --split confirm  # a third draw, read once at the end
+  python run_backtest.py --split test --blocks 5   # also print per-block samples
+
+--blocks N prints `[Sample] block k: <sharpe>` lines after the metric, so the
+held-out gate can judge a lower confidence bound instead of one noisy number.
 """
 import argparse
 import numpy as np
@@ -16,6 +21,7 @@ from strategies import active_strategy
 
 SEED = 38
 TEST_SEED_OFFSET = 17
+CONFIRM_SEED_OFFSET = 29
 N_DAYS = 500
 TRAIN_RATIO = 0.7
 
@@ -54,9 +60,11 @@ def run_backtest(data, strategy_func):
 def main():
     parser = argparse.ArgumentParser(description="Quant Lab Backtest Runner")
     parser.add_argument(
-        "--split", choices=["train", "test", "all"], default="all",
-        help="Data split: train (first 70%%), test (last 30%%), or all"
+        "--split", choices=["train", "test", "confirm", "all"], default="all",
+        help="Data split: train (first 70%%), test (last 30%%), confirm, or all"
     )
+    parser.add_argument("--blocks", type=int, default=0,
+                        help="Also print per-block Sharpe samples")
     args = parser.parse_args()
 
     data = generate_price_data()
@@ -64,13 +72,19 @@ def main():
     split_point = int(len(data) * TRAIN_RATIO)
     if args.split == "train":
         data = data.iloc[:split_point].reset_index(drop=True)
-    elif args.split == "test":
-        data = generate_price_data(seed_offset=TEST_SEED_OFFSET)
+    elif args.split in ("test", "confirm"):
+        offset = TEST_SEED_OFFSET if args.split == "test" else CONFIRM_SEED_OFFSET
+        data = generate_price_data(seed_offset=offset)
         data = data.iloc[split_point:].reset_index(drop=True)
 
     strategy_returns = run_backtest(data, active_strategy)
     sharpe = calculate_sharpe(strategy_returns)
     print(f"[Metric] Sharpe Ratio: {sharpe:.4f}")
+    if args.blocks > 1:
+        size = len(strategy_returns) // args.blocks
+        for k in range(args.blocks):
+            block = strategy_returns.iloc[k * size:(k + 1) * size]
+            print(f"[Sample] block {k + 1}: {calculate_sharpe(block):.4f}")
 
 
 if __name__ == "__main__":
