@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="900" viewBox="0 0 1280 900" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <!-- evaloop exit condition and verdict. Navy: what the agent sees. Orange: what it never sees. -->
+  <defs>
+    <marker id="an" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#23399e"/></marker>
+    <marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c46a00"/></marker>
+  </defs>
+  <rect width="1280" height="900" fill="#ffffff"/>
+
+  <!-- row 1 -->
+  <rect x="30" y="150" width="200" height="80" rx="16" fill="none" stroke="#23399e" stroke-width="3"/>
+  <text x="130" y="198" text-anchor="middle" font-size="22" font-weight="700" fill="#1d2f86">SESSION ENDS</text>
+  <line x1="230" y1="190" x2="296" y2="190" stroke="#23399e" stroke-width="2.5" marker-end="url(#an)"/>
+
+  <polygon points="430,95 560,190 430,285 300,190" fill="none" stroke="#23399e" stroke-width="3"/>
+  <text x="430" y="182" text-anchor="middle" font-size="20" font-weight="600" fill="#1d2f86">visible metric</text>
+  <text x="430" y="208" text-anchor="middle" font-size="20" font-weight="600" fill="#1d2f86">reaches target?</text>
+  <line x1="560" y1="190" x2="626" y2="190" stroke="#23399e" stroke-width="2.5" marker-end="url(#an)"/>
+  <text x="593" y="176" text-anchor="middle" font-size="19" fill="#1d2f86">yes</text>
+
+  <polygon points="800,75 970,190 800,305 630,190" fill="none" stroke="#c46a00" stroke-width="3"/>
+  <text x="800" y="168" text-anchor="middle" font-size="20" font-weight="600" fill="#b05f00">held-out clears</text>
+  <text x="800" y="194" text-anchor="middle" font-size="20" font-weight="600" fill="#b05f00">target?</text>
+  <text x="800" y="220" text-anchor="middle" font-size="15" fill="#b05f00">on its lower bound,</text>
+  <text x="800" y="239" text-anchor="middle" font-size="15" fill="#b05f00">or value + margin</text>
+  <line x1="970" y1="190" x2="1036" y2="190" stroke="#c46a00" stroke-width="2.5" marker-end="url(#ao)"/>
+  <text x="1003" y="176" text-anchor="middle" font-size="19" fill="#b05f00">yes</text>
+
+  <rect x="1040" y="150" width="210" height="80" rx="16" fill="none" stroke="#23399e" stroke-width="3"/>
+  <text x="1145" y="198" text-anchor="middle" font-size="22" font-weight="700" fill="#1d2f86">STOP</text>
+
+  <!-- row 1 "no" branches -->
+  <line x1="430" y1="285" x2="430" y2="386" stroke="#23399e" stroke-width="2.5" marker-end="url(#an)"/>
+  <text x="446" y="340" font-size="19" fill="#1d2f86">no</text>
+  <rect x="330" y="390" width="200" height="80" rx="16" fill="none" stroke="#23399e" stroke-width="3"/>
+  <text x="430" y="438" text-anchor="middle" font-size="22" font-weight="700" fill="#1d2f86">KEEP GOING</text>
+
+  <line x1="800" y1="305" x2="800" y2="386" stroke="#c46a00" stroke-width="2.5" marker-end="url(#ao)"/>
+  <text x="816" y="345" font-size="19" fill="#b05f00">no</text>
+  <rect x="680" y="390" width="240" height="90" rx="16" fill="none" stroke="#c46a00" stroke-width="3"/>
+  <text x="800" y="428" text-anchor="middle" font-size="21" font-weight="700" fill="#b05f00">NOT TRANSFERRED</text>
+  <text x="800" y="456" text-anchor="middle" font-size="17" fill="#b05f00">keep going</text>
+
+  <!-- row 2: the confirmation -->
+  <line x1="1145" y1="230" x2="1145" y2="491" stroke="#c46a00" stroke-width="2.5" marker-end="url(#ao)"/>
+  <polygon points="1145,495 1265,590 1145,685 1025,590" fill="none" stroke="#c46a00" stroke-width="3"/>
+  <polygon points="1145,505 1252,590 1145,675 1038,590" fill="none" stroke="#c46a00" stroke-width="1.5"/>
+  <text x="1145" y="572" text-anchor="middle" font-size="18" font-weight="600" fill="#b05f00">confirmation,</text>
+  <text x="1145" y="596" text-anchor="middle" font-size="18" font-weight="600" fill="#b05f00">read once,</text>
+  <text x="1145" y="620" text-anchor="middle" font-size="18" font-weight="600" fill="#b05f00">clears target?</text>
+
+  <line x1="1025" y1="590" x2="964" y2="590" stroke="#c46a00" stroke-width="2.5" marker-end="url(#ao)"/>
+  <text x="994" y="576" text-anchor="middle" font-size="19" fill="#b05f00">no</text>
+  <rect x="740" y="550" width="220" height="80" rx="16" fill="none" stroke="#c46a00" stroke-width="3"/>
+  <text x="850" y="598" text-anchor="middle" font-size="21" font-weight="700" fill="#b05f00">NOT CONFIRMED</text>
+
+  <line x1="1145" y1="685" x2="1145" y2="736" stroke="#c46a00" stroke-width="2.5" marker-end="url(#ao)"/>
+  <text x="1161" y="716" font-size="19" fill="#b05f00">yes</text>
+  <rect x="1040" y="740" width="210" height="70" rx="16" fill="none" stroke="#23399e" stroke-width="3"/>
+  <text x="1145" y="783" text-anchor="middle" font-size="22" font-weight="700" fill="#1d2f86">CONFIRMED</text>
+
+  <!-- key -->
+  <line x1="40" y1="600" x2="80" y2="600" stroke="#23399e" stroke-width="3"/>
+  <text x="92" y="606" font-size="18" fill="#3d4054">the agent's own view</text>
+  <line x1="40" y1="640" x2="80" y2="640" stroke="#c46a00" stroke-width="3"/>
+  <text x="92" y="646" font-size="18" fill="#3d4054">never shown to the agent</text>
+
+  <line x1="40" y1="840" x2="1240" y2="840" stroke="#8a8ca0" stroke-width="1.5"/>
+  <text x="640" y="876" text-anchor="middle" font-size="20" fill="#60647a">the held-out split decides when to stop; the confirmation, read once, decides what the stop is worth</text>
+</svg>

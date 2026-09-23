@@ -56,7 +56,8 @@ was executed once and its result discarded. Full record in
 
 ## Try it
 
-Nothing here needs an API key or an LLM. Both of these run from a fresh clone.
+Nothing here needs an API key or an LLM. All three run from a fresh clone; the
+examples want `numpy` and `pandas`.
 
 ```bash
 git clone https://github.com/leoncuhk/evaloop && cd evaloop
@@ -68,13 +69,23 @@ python run.py verify examples/quant-lab
 # Watch a session rewrite its own scorer and get caught. Replayed from a
 # script, so no LLM calls and no cost.
 python run.py loop --simulate --pause 0 examples/tamper-demo
+
+# See a held-out pass that a once-read confirmation split refutes.
+D=$(mktemp -d); mkdir -p $D/ql/.state
+cp examples/quant-lab/{hypothesis.md,run_backtest.py,strategies.py} $D/ql/
+echo '{"experiments": [], "best_metric": 1.9644, "target_metric": 1.5}' > $D/ql/.state/journal.json
+printf 'hidden_verify_command=python3 run_backtest.py --split test\nconfirm_verify_command=python3 run_backtest.py --split confirm\n' > $D/task.conf
+python run.py verify $D/ql --sealed-verify $D/task.conf
+python run.py evidence $D/ql --sealed-verify $D/task.conf --confirm
 ```
 
 The second prints `TAMPERED: scoring inputs changed during the session` and
 refuses to call the metric a result. To replay it, `rm -rf
-examples/tamper-demo/.state/journal.json examples/tamper-demo/logs`.
+examples/tamper-demo/.state/journal.json examples/tamper-demo/logs`. The third
+ends `Evidence: NOT CONFIRMED`: the held-out split scores 1.67 against a 1.5
+target, and the confirmation split, read once, scores 0.06.
 
-## Three ways to use it
+## Four ways to use it
 
 In [Loop Engineering](https://addyosmani.com/blog/loop-engineering) terms this is
 Loop 2 with a thin Loop 3 attached; in [harness
@@ -105,6 +116,10 @@ result["hidden"]["metric"]        # what it may not see
 result["integrity"]["trusted"]    # False if the candidate rewrote its scoring
 ```
 
+Samples your evaluator prints as `[Sample] <label>: <number>` come back in
+`result["hidden"]["samples"]`, and `core.lower_bound()` turns them into the
+figure the gate judges.
+
 ### 2. As a verification step around your own agent
 
 ```bash
@@ -121,7 +136,20 @@ python run.py loop ./my-project --sealed-verify ~/scoring/proj.conf
 ```
 
 Stateless sessions against `hypothesis.md`, verification after each, hidden
-metric accumulated across the run, circuit breaker and budget cap.
+metric accumulated across the run, circuit breaker and budget cap. The run ends
+with an evidence verdict, and reads the confirmation split if the gate opened.
+
+### 4. As the gate in front of a decision
+
+```bash
+python run.py evidence ./my-project --sealed-verify ~/scoring/proj.conf --json
+```
+
+The same verdict as a JSON record — held-out figure and its basis, how often
+the split was consulted, discredited measurements, the once-read confirmation,
+and what is not established. A promotion step, a release checklist or a
+reviewer reads this instead of a bare metric. Exit status is non-zero unless the
+verdict is `confirmed`, `unconfirmed` or `no target`.
 
 ### Starting your own
 
@@ -131,10 +159,14 @@ that already works before spending a session:
 ```bash
 mkdir my-lab
 cp examples/quant-lab/{hypothesis.md,run_backtest.py,strategies.py} my-lab/
-echo 'hidden_verify_command=python3 run_backtest.py --split test' > ~/task.conf
+cat > ~/task.conf <<'CONF'
+hidden_verify_command=python3 run_backtest.py --split test --blocks 5
+confirm_verify_command=python3 run_backtest.py --split confirm
+CONF
 
 python run.py verify my-lab                          # confirm it scores
 python run.py loop my-lab --sealed-verify ~/task.conf
+python run.py evidence my-lab --sealed-verify ~/task.conf
 ```
 
 ## How it works
@@ -163,7 +195,7 @@ is not sufficient. The gate can only withhold completion, never cause it; it
 reads the latest clean record rather than the best; and a discredited record is
 not evidence.
 
-![The exit condition: a session ends, the visible metric is checked against the target, and only if it clears does a second amber decision ask whether the held-out metric clears it too; no there means not done because the gains did not transfer. The second question is the one the agent never sees](assets/evaloop-held-out-gate.png)
+![The exit condition and the verdict. A session ends; if the visible metric reaches the target, an orange decision the agent never sees asks whether the held-out split clears it, on its lower bound or its value plus a margin. No means not transferred, keep going. Yes means stop, and a confirmation split read once decides confirmed or not confirmed. The held-out split decides when to stop; the confirmation decides what the stop is worth](assets/evaloop-held-out-gate.png)
 
 ```
 Orient: visible 3.6430 meets the target and held-out -0.0297 does not:
@@ -189,30 +221,33 @@ Evidence: NOT CONFIRMED — held-out cleared the gate; the unselected confirmati
   not established: construct validity: whether the metric measures what you care about. …
 ```
 
-That is `examples/quant-lab` with its baseline strategy, reproducible in three
-commands — [docs/empirical-record.md](docs/empirical-record.md#noise-at-the-gate).
+That is the third command under [Try it](#try-it): `examples/quant-lab` with
+its baseline strategy. Details in
+[docs/empirical-record.md](docs/empirical-record.md#noise-at-the-gate).
 
 > **What this runs on your machine.** `run.py loop` starts an agent with
 > permissions bypassed, and the safety hook is a substring blocklist that stops
 > an accident, not an adversary. Run it in a container or a throwaway copy.
-> `verify` and `status` make no LLM calls and start no agent.
+> `verify`, `status` and `evidence` make no LLM calls and start no agent.
 > [Details](docs/verification.md).
 
 ## Architecture
 
-![evaloop architecture: the orchestrator runs the project and reads its metric; the sealed config and held-out data reach the orchestrator only, and the path from held-out data into the project is crossed out](assets/evaloop-architecture.png)
+![evaloop architecture: the orchestrator runs the project and reads its metric; the sealed config, the held-out split and the confirmation split reach the orchestrator only, the confirmation once at the end; the path from those splits into the project is crossed out; the orchestrator reports an evidence verdict rather than a metric](assets/evaloop-architecture.png)
 
-*What the crossed-out arrow means: evaloop never carries the held-out metric back
-into the project, and `--sealed-verify` puts the definition of how to score
-beyond the agent's reach. It does not make the held-out **data** unreadable — if
-that file sits somewhere the agent can open, the agent can open it. Closing that
-last path is filesystem permissions or a sandbox, not this tool. The crossed-out
-arrow is a guarantee about what evaloop does, and an intent about the rest.*
+*What the crossed-out arrow means: evaloop never carries the held-out or
+confirmation figures back into the project, and `--sealed-verify` puts the
+definition of how to score beyond the agent's reach. It does not make the
+held-out **data** unreadable — if that file sits somewhere the agent can open,
+the agent can open it. Declaring it as `hidden_data=` in the sealed file makes
+evaloop refuse a path inside the project; anything beyond that is filesystem
+permissions or a sandbox, not this tool.*
 
 The agent works inside the project directory and can write anything in it — its
 own code, its own state, its own scorer. The orchestrator sits outside. It reads
 how to score from a file the agent cannot reach, runs the scoring itself, and
-keeps the held-out number on its own side of that boundary.
+keeps the held-out number on its own side of that boundary. What leaves the
+orchestrator is not a metric but a verdict on it.
 
 Each session starts with a fresh context and ends when its one experiment is
 done. What carries across sessions is files, not context: the journal, the
@@ -226,8 +261,9 @@ progress log, the learnings. Session 30 reads what session 1 wrote.
 | **orient** | `strategist` | Every M sessions, decide continue / pivot / done |
 
 Input is `hypothesis.md`. State is `.state/journal.json`, `.state/progress.md`,
-`.state/learnings.md`. The loop exits when the target metric is reached, the
-circuit breaker trips, or the budget is spent.
+`.state/learnings.md`. The loop exits when the visible target is met and the
+held-out gate does not refuse, the circuit breaker trips, or the budget is
+spent — and prints the evidence verdict either way.
 
 A mode is just a directory under `modes/`. evaloop ships one; copy it and change
 `mode.conf` to point the loop at a different kind of work. The engine reads what
@@ -246,7 +282,7 @@ evaloop/
 ├── tests/              # 109 tests, run by CI on 3.10 / 3.11 / 3.12
 ├── bench/              # does an agent get around the controls? (live sessions)
 ├── docs/               # verification, empirical record, design rationale, archive
-├── assets/             # diagrams
+├── assets/             # diagrams; SVG sources and render script in assets/src/
 └── examples/
     ├── quant-lab/      # scores anywhere; used by the quick start and CI
     ├── tamper-demo/    # the integrity layer, replayed, no LLM calls
@@ -269,6 +305,15 @@ Paired difference, tuned minus baseline:
 measurable to the one it was not.** Nobody cheated in any of those runs. That is
 what a held-out metric buys, and no amount of care on the visible segment would
 have shown it.
+
+A held-out metric can be fooled the same way, one level up. With no tuning at
+all, quant-lab's held-out split happens to clear the target:
+
+![Strip plot of Sharpe ratios for quant-lab's baseline strategy against a 1.5 target. Train split, visible: 1.96. Held-out split, point value: 1.67, which clears the target, so a point-value gate stops here. The same held-out split in five blocks: samples from -3.6 to 7.6, mean 0.05, one-sided 95% lower bound -4.45, not transferred. Confirmation split, read once: 0.06, not confirmed](assets/evaloop-noise-at-the-gate.png)
+
+The lower bound catches it because the pieces disagree; the confirmation
+catches it because nobody chose when to read it. Synthetic data and one case —
+a demonstration of the mechanism, not a rate.
 
 What has and has not been measured, what those figures do not show, and where
 this repository's own earlier readings were wrong:

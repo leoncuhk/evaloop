@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="920" viewBox="0 0 1280 920" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <!-- evaloop architecture. Navy: orchestrator side. Orange: the agent's reach. -->
+  <defs>
+    <marker id="an" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#23399e"/></marker>
+    <marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#c46a00"/></marker>
+    <g id="lock">
+      <rect x="-13" y="-4" width="26" height="22" rx="4" fill="none" stroke="#23399e" stroke-width="2.5"/>
+      <path d="M-8,-4 v-7 a8,8 0 0 1 16,0 v7" fill="none" stroke="#23399e" stroke-width="2.5"/>
+      <circle cx="0" cy="7" r="2.6" fill="#23399e"/>
+    </g>
+  </defs>
+  <rect width="1280" height="920" fill="#ffffff"/>
+
+  <!-- evidence -->
+  <rect x="400" y="24" width="480" height="92" rx="16" fill="none" stroke="#23399e" stroke-width="3"/>
+  <text x="640" y="64" text-anchor="middle" font-size="26" font-weight="700" letter-spacing="3" fill="#1d2f86">EVIDENCE</text>
+  <text x="640" y="95" text-anchor="middle" font-size="17" fill="#3d4054">a verdict, not a metric · what is not established</text>
+  <line x1="640" y1="170" x2="640" y2="121" stroke="#23399e" stroke-width="2.5" marker-end="url(#an)"/>
+  <text x="656" y="152" font-size="18" fill="#1d2f86">report</text>
+
+  <!-- orchestrator -->
+  <rect x="30" y="170" width="1220" height="100" rx="18" fill="none" stroke="#23399e" stroke-width="3"/>
+  <text x="640" y="232" text-anchor="middle" font-size="32" font-weight="700" letter-spacing="5" fill="#1d2f86">ORCHESTRATOR</text>
+
+  <!-- project side -->
+  <line x1="170" y1="270" x2="170" y2="514" stroke="#23399e" stroke-width="2.5" marker-end="url(#an)"/>
+  <text x="150" y="400" text-anchor="end" font-size="19" fill="#1d2f86">run</text>
+  <line x1="390" y1="520" x2="390" y2="276" stroke="#23399e" stroke-width="2.5" marker-end="url(#an)"/>
+  <text x="410" y="400" font-size="19" fill="#1d2f86">metric</text>
+
+  <rect x="40" y="520" width="520" height="240" rx="22" fill="none" stroke="#c46a00" stroke-width="3" stroke-dasharray="12 9"/>
+  <text x="300" y="574" text-anchor="middle" font-size="24" font-weight="700" fill="#b05f00">PROJECT <tspan font-weight="400">— agent can write</tspan></text>
+  <rect x="70" y="610" width="140" height="110" rx="12" fill="none" stroke="#23399e" stroke-width="2.5"/>
+  <text x="140" y="672" text-anchor="middle" font-size="20" fill="#1d2f86">code</text>
+  <rect x="230" y="610" width="140" height="110" rx="12" fill="none" stroke="#23399e" stroke-width="2.5"/>
+  <text x="300" y="672" text-anchor="middle" font-size="20" fill="#1d2f86">state</text>
+  <rect x="390" y="610" width="140" height="110" rx="12" fill="none" stroke="#23399e" stroke-width="2.5"/>
+  <text x="460" y="662" text-anchor="middle" font-size="20" fill="#1d2f86">scorer</text>
+  <text x="460" y="688" text-anchor="middle" font-size="14" fill="#3d4054">fingerprinted</text>
+
+  <!-- sealed side -->
+  <line x1="715" y1="540" x2="715" y2="276" stroke="#23399e" stroke-width="2.5" marker-end="url(#an)"/>
+  <text x="731" y="400" font-size="18" fill="#1d2f86">how to</text>
+  <text x="731" y="422" font-size="18" fill="#1d2f86">score</text>
+  <line x1="935" y1="540" x2="935" y2="276" stroke="#23399e" stroke-width="2.5" marker-end="url(#an)"/>
+  <text x="951" y="400" font-size="18" fill="#1d2f86">held-out</text>
+  <text x="951" y="422" font-size="18" fill="#1d2f86">metric</text>
+  <line x1="1155" y1="540" x2="1155" y2="276" stroke="#23399e" stroke-width="2.5" marker-end="url(#an)"/>
+  <text x="1139" y="400" text-anchor="end" font-size="18" fill="#1d2f86">once,</text>
+  <text x="1139" y="422" text-anchor="end" font-size="18" fill="#1d2f86">at the end</text>
+
+  <rect x="620" y="540" width="190" height="100" rx="14" fill="none" stroke="#23399e" stroke-width="3"/>
+  <use href="#lock" x="715" y="570"/>
+  <text x="715" y="620" text-anchor="middle" font-size="17" font-weight="700" fill="#1d2f86">SEALED CONFIG</text>
+  <rect x="840" y="540" width="190" height="100" rx="14" fill="none" stroke="#23399e" stroke-width="3"/>
+  <use href="#lock" x="935" y="570"/>
+  <text x="935" y="620" text-anchor="middle" font-size="17" font-weight="700" fill="#1d2f86">HELD-OUT SPLIT</text>
+  <rect x="1060" y="540" width="190" height="100" rx="14" fill="none" stroke="#23399e" stroke-width="3"/>
+  <use href="#lock" x="1155" y="570"/>
+  <text x="1155" y="620" text-anchor="middle" font-size="17" font-weight="700" fill="#1d2f86">CONFIRMATION</text>
+
+  <!-- never carried into the project -->
+  <path d="M935,640 V710 M1155,640 V710 H566" fill="none" stroke="#c46a00" stroke-width="2.5" stroke-dasharray="9 8" marker-end="url(#ao)"/>
+  <g stroke="#c46a00" stroke-width="4" stroke-linecap="round">
+    <line x1="598" y1="692" x2="634" y2="728"/><line x1="634" y1="692" x2="598" y2="728"/>
+  </g>
+  <text x="760" y="742" text-anchor="middle" font-size="16" fill="#b05f00">never carried into the project</text>
+
+  <line x1="30" y1="820" x2="1250" y2="820" stroke="#23399e" stroke-width="1.5"/>
+  <g font-size="21" fill="#1d2f86" text-anchor="middle">
+    <text x="150" y="870">verify</text>
+    <text x="400" y="870">fingerprint</text>
+    <text x="640" y="870">seal</text>
+    <text x="880" y="870">confirm once</text>
+    <text x="1130" y="870">report</text>
+  </g>
+</svg>

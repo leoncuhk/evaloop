@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="620" viewBox="0 0 1280 620" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <!-- examples/quant-lab, shipped baseline strategy. Figures: docs/empirical-record.md#noise-at-the-gate
+       x(v) = 250 + (v + 6) * 950 / 14 ; palette validated with the dataviz validator (#2f4fc4, #c46a00) -->
+  <rect width="1280" height="620" fill="#ffffff"/>
+
+  <text x="40" y="46" font-size="24" font-weight="700" fill="#1f2130">One lucky held-out draw</text>
+  <text x="40" y="74" font-size="17" fill="#60647a">examples/quant-lab, baseline strategy, no optimisation · Sharpe ratio by reading · target 1.5</text>
+  <circle cx="880" cy="40" r="7" fill="#2f4fc4"/>
+  <text x="895" y="46" font-size="16" fill="#3d4054">the agent's view</text>
+  <circle cx="1040" cy="40" r="7" fill="#c46a00"/>
+  <text x="1055" y="46" font-size="16" fill="#3d4054">never shown to the agent</text>
+
+  <!-- grid and axis -->
+  <g stroke="#e6e7ee" stroke-width="1">
+    <line x1="250" y1="110" x2="250" y2="520"/><line x1="385.7" y1="110" x2="385.7" y2="520"/>
+    <line x1="521.4" y1="110" x2="521.4" y2="520"/><line x1="792.9" y1="110" x2="792.9" y2="520"/>
+    <line x1="928.6" y1="110" x2="928.6" y2="520"/><line x1="1064.3" y1="110" x2="1064.3" y2="520"/>
+    <line x1="1200" y1="110" x2="1200" y2="520"/>
+  </g>
+  <line x1="657.1" y1="110" x2="657.1" y2="520" stroke="#b9bbc8" stroke-width="1.5"/>
+  <line x1="250" y1="520" x2="1200" y2="520" stroke="#8a8ca0" stroke-width="1.5"/>
+  <g font-size="15" fill="#60647a" text-anchor="middle">
+    <text x="250" y="544">−6</text><text x="385.7" y="544">−4</text><text x="521.4" y="544">−2</text>
+    <text x="657.1" y="544">0</text><text x="792.9" y="544">2</text><text x="928.6" y="544">4</text>
+    <text x="1064.3" y="544">6</text><text x="1200" y="544">8</text>
+  </g>
+  <text x="725" y="580" text-anchor="middle" font-size="16" fill="#60647a">Sharpe ratio</text>
+
+  <!-- target -->
+  <line x1="759" y1="100" x2="759" y2="520" stroke="#3d4054" stroke-width="2" stroke-dasharray="7 6"/>
+  <text x="759" y="96" text-anchor="middle" font-size="15" font-weight="600" fill="#3d4054">target 1.5</text>
+
+  <!-- row labels -->
+  <g font-size="17" fill="#1f2130" text-anchor="end">
+    <text x="228" y="162">Train split</text>
+    <text x="228" y="252">Held-out split</text>
+    <text x="228" y="342">Held-out, 5 blocks</text>
+    <text x="228" y="432">Confirmation</text>
+  </g>
+  <g font-size="14" fill="#60647a" text-anchor="end">
+    <text x="228" y="182">visible</text>
+    <text x="228" y="272">point value</text>
+    <text x="228" y="362">[Sample] lines</text>
+    <text x="228" y="452">read once</text>
+  </g>
+
+  <!-- row 1: train -->
+  <circle cx="790.3" cy="156" r="9" fill="#2f4fc4" stroke="#ffffff" stroke-width="2"/>
+  <text x="808" y="162" font-size="16" fill="#1f2130">1.96</text>
+
+  <!-- row 2: held-out point -->
+  <circle cx="770.3" cy="246" r="9" fill="#c46a00" stroke="#ffffff" stroke-width="2"/>
+  <text x="788" y="252" font-size="16" fill="#1f2130">1.67 — clears the target; a point-value gate stops here</text>
+
+  <!-- row 3: blocks, mean and one-sided lower bound -->
+  <line x1="355.2" y1="336" x2="1200" y2="336" stroke="#c46a00" stroke-width="2" opacity="0.55"/>
+  <line x1="355.2" y1="324" x2="355.2" y2="348" stroke="#c46a00" stroke-width="3"/>
+  <line x1="660.8" y1="327" x2="660.8" y2="345" stroke="#c46a00" stroke-width="2"/>
+  <g fill="#ffffff" stroke="#c46a00" stroke-width="2.5">
+    <circle cx="446.2" cy="336" r="7"/><circle cx="1174.2" cy="336" r="7"/>
+    <circle cx="414.2" cy="336" r="7"/><circle cx="774.1" cy="336" r="7"/>
+    <circle cx="495.3" cy="336" r="7"/>
+  </g>
+  <text x="349" y="374" font-size="15" fill="#1f2130">95% lower bound −4.45: not transferred</text>
+  <text x="660.8" y="316" text-anchor="middle" font-size="14" fill="#60647a">mean 0.05</text>
+
+  <!-- row 4: confirmation -->
+  <circle cx="661.1" cy="426" r="11" fill="none" stroke="#c46a00" stroke-width="2"/>
+  <circle cx="661.1" cy="426" r="7" fill="#c46a00"/>
+  <text x="642" y="432" text-anchor="end" font-size="16" fill="#1f2130">not confirmed — 0.06</text>
+</svg>

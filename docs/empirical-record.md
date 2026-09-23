@@ -7,8 +7,8 @@ in this repository, so it can be checked rather than taken on trust.
 
 | Example | Sessions | Outcome | Record |
 |---|---|---|---|
-| `examples/goal-vs-loop` | 4 (Theorizer/Executor ×2) | Sharpe 0.8363 → 1.9084 on synthetic data, target 1.5 met | [`logs/`](examples/goal-vs-loop/logs/), [`.state/history/`](examples/goal-vs-loop/.state/history/), and `session-history.bundle` (`git clone` it to replay all 5 commits) |
-| `examples/qlib-quant`<br>([prerequisites](examples/qlib-quant/PREREQUISITES.md)) | 12, incl. an 11-round sweep | +0.68 on the selected segment across 5 folds (*t*=5.94); **+0.03 held out (*t*=0.06)** | [`.state/history/`](examples/qlib-quant/.state/history/), [`logs/`](examples/qlib-quant/logs/), [`.state/learnings.md`](examples/qlib-quant/.state/learnings.md) |
+| `examples/goal-vs-loop` | 4 (Theorizer/Executor ×2) | Sharpe 0.8363 → 1.9084 on synthetic data, target 1.5 met | [`logs/`](../examples/goal-vs-loop/logs/), [`.state/history/`](../examples/goal-vs-loop/.state/history/), and `session-history.bundle` (`git clone` it to replay all 5 commits) |
+| `examples/qlib-quant`<br>([prerequisites](../examples/qlib-quant/PREREQUISITES.md)) | 12, incl. an 11-round sweep | +0.68 on the selected segment across 5 folds (*t*=5.94); **+0.03 held out (*t*=0.06)** | [`.state/history/`](../examples/qlib-quant/.state/history/), [`logs/`](../examples/qlib-quant/logs/), [`.state/learnings.md`](../examples/qlib-quant/.state/learnings.md) |
 
 Both working trees are reset to baseline so the examples start clean; the runs
 above are preserved under `.state/history/` rather than in the live state files.
@@ -18,8 +18,8 @@ above are preserved under `.state/history/` rather than in the live state files.
 The qlib configurations were scored against years no tuning round ever saw, with
 the scoring definition sealed outside the project. This is the result the whole
 harness exists to obtain. Method, caveats and reproduction:
-[single fold](examples/qlib-quant/.state/history/hidden-oos-2026-07-30.md),
-[five folds](examples/qlib-quant/.state/history/rolling-2026-07-31.md).
+[single fold](../examples/qlib-quant/.state/history/hidden-oos-2026-07-30.md),
+[five folds](../examples/qlib-quant/.state/history/rolling-2026-07-31.md).
 
 Five folds. Each trains from 2018, selects on one year, and is scored on the
 next. Paired difference between the tuned configuration and the baseline:
@@ -69,6 +69,8 @@ python3 run.py evidence $D/ql --sealed-verify $D/task.conf --confirm
 | Held-out split, point value | 1.6689 | clears 1.5 — the gate opens and a loop would stop here |
 | Held-out split, five 30-day blocks (`--blocks 5`) | −3.11, 7.62, −3.58, 1.73, −2.39 | 95% lower bound −4.45: `NOT TRANSFERRED` |
 | Confirmation split, read once | 0.0596 | `NOT CONFIRMED` |
+
+![Strip plot: train 1.96; held-out point 1.67 clears the 1.5 target; held-out in five blocks has a 95% lower bound of -4.45; confirmation read once scores 0.06](../assets/evaloop-noise-at-the-gate.png)
 
 The point value passes and the strategy has no edge: a third draw from the same
 process scores 0.06. Nothing misbehaved; one held-out number was simply lucky.

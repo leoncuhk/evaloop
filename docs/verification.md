@@ -27,7 +27,7 @@ Why it matters, empirically: research agents on [MLE-bench](https://arxiv.org/ht
 
 ### 3. Scoring integrity
 
-Not surfacing a metric is not the same as an agent being unable to obtain it. Everything under the project directory is writable by the agent — including `.verify` and the scripts it names. A live session in [`examples/goal-vs-loop/logs/session_4.log`](examples/goal-vs-loop/logs/session_4.log) ran the hidden split itself and reported `hidden test split = 1.5233` in its own summary.
+Not surfacing a metric is not the same as an agent being unable to obtain it. Everything under the project directory is writable by the agent — including `.verify` and the scripts it names. A live session in [`examples/goal-vs-loop/logs/session_4.log`](../examples/goal-vs-loop/logs/session_4.log) ran the hidden split itself and reported `hidden test split = 1.5233` in its own summary.
 
 Three controls, in order of strength:
 
@@ -66,7 +66,7 @@ one was: written to `.state/hidden_metrics.json`, consulted by nothing. The loop
 declared victory when `best_metric` — the figure the agent had spent every
 session raising — reached its target.
 
-![The exit condition: a session ends, the visible metric is checked against the target, and only if it clears does a second amber decision ask whether the held-out metric clears it too; no there means not done because the gains did not transfer. The second question is the one the agent never sees](assets/evaloop-held-out-gate.png)
+![The exit condition and the verdict: the visible target, then the held-out split judged on its lower bound or value plus margin, then a confirmation split read once. The held-out split decides when to stop; the confirmation decides what the stop is worth](../assets/evaloop-held-out-gate.png)
 
 The exit condition now asks both:
 
@@ -75,7 +75,7 @@ Orient: visible 3.6430 meets the target and held-out -0.0297 does not:
         the gains have not transferred
 ```
 
-Those are the real figures from [`examples/qlib-quant`](examples/qlib-quant/.state/history/hidden-oos-2026-07-30.md).
+Those are the real figures from [`examples/qlib-quant`](../examples/qlib-quant/.state/history/hidden-oos-2026-07-30.md).
 Under the old rule that run reports success. Under this one it keeps going and
 says why.
 
