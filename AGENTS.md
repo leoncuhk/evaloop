@@ -1,6 +1,6 @@
 # evaloop — Project Instructions
 
-> Auto-read by Claude Code when working on this repository.
+> Auto-read by Claude Code (2.1.277+) and Codex when working on this repository.
 
 ## What This Project Is
 
@@ -13,7 +13,7 @@ criterion is a metric rather than a test suite. Two engines:
 
 - `core.py` — verification harness core (`run_verification`, `resolve_verify_cmd`, state, metrics)
 - `run.py` — CLI + optional session loop (wraps core.py verification around agent sessions)
-- `modes/<name>/` — mode-specific logic (mode.conf + CLAUDE.md + prompts/)
+- `modes/<name>/` — mode-specific logic (mode.conf + AGENTS.md + prompts/)
 - `examples/<project>/.state/learnings.md` — cross-session knowledge, tracked
 - `examples/<project>/.state/history/` — archived records of completed runs
 - `examples/<project>/logs/` — verbatim session transcripts, tracked

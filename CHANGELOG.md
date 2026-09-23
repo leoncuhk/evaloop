@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- **Agent instructions are `AGENTS.md`, not `CLAUDE.md`.** The repository
+  instructions and the `modes/experiment` template are renamed, and the engine
+  now writes the mode template to `<project>/AGENTS.md`. Claude Code (2.1.277+)
+  reads `AGENTS.md` where no `CLAUDE.md` exists, and Codex reads it natively, so
+  one file serves both. `mode.conf` takes `agents_md=`; the old `claude_md=` key
+  is still honoured
+- **A project `CLAUDE.md` now triggers a warning.** Claude Code skips
+  `AGENTS.md` by default when a `CLAUDE.md` sits beside it, so a leftover file
+  would silently replace the engine's instructions with the project's
+
 ## [7.5.0] — 2026-07-31
 
 A file-by-file audit. Most of what follows is removal.

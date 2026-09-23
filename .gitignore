@@ -14,4 +14,4 @@ mlruns/
 !examples/*/logs/*.log
 # Runtime artifacts copied into project dirs by the engine.
 # Learnings live in .state/learnings.md (tracked), NOT in this copied file.
-examples/*/CLAUDE.md
+examples/*/AGENTS.md

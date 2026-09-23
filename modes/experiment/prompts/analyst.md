@@ -10,7 +10,7 @@ Triggered periodically to review research progress, detect patterns in experimen
 cat hypothesis.md
 cat .state/journal.json
 cat .state/progress.md
-cat CLAUDE.md
+cat AGENTS.md
 git log --oneline -20
 ```
 

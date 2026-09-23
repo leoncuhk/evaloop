@@ -32,7 +32,7 @@ cat hypothesis.md
 cat .state/journal.json
 tail -50 .state/progress.md
 cat .state/learnings.md 2>/dev/null || true
-cat CLAUDE.md
+cat AGENTS.md
 git log --oneline -10 2>/dev/null || true
 ```
 
@@ -60,7 +60,7 @@ Follow the instructions in your specific prompt file.
 Append **every** discovery to `.state/learnings.md` (create it if absent).
 These are critical for future sessions — they prevent repeating failed experiments.
 
-Write them there, **not** into this file: this `CLAUDE.md` is a copy of the mode
+Write them there, **not** into this file: this `AGENTS.md` is a copy of the mode
 template that the engine drops into the project, so it is not version-controlled
 and anything you append to it is lost on the next run.
 

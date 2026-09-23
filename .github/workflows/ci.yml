@@ -15,7 +15,7 @@ jobs:
         run: |
           python3 -c "import ast; ast.parse(open('run.py').read())"
           python3 -c "import ast; ast.parse(open('core.py').read())"
-      # CLAUDE.md states a size budget. A stated constraint nothing checks is
+      # AGENTS.md states a size budget. A stated constraint nothing checks is
       # the same class of problem as a documented protection nothing wires in.
       - name: Size budget
         run: |

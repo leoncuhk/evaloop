@@ -33,7 +33,7 @@ python3 run.py loop --simulate --pause 0 examples/tamper-demo
 
 ## Defining your own loop
 
-A mode is a directory with a `mode.conf`, a `CLAUDE.md`, and a `prompts/`
+A mode is a directory with a `mode.conf`, an `AGENTS.md`, and a `prompts/`
 folder. It does not have to live in this repository:
 
 ```ini
@@ -53,7 +53,7 @@ phase_init=theorizer
 phase_work=executor
 phase_review=analyst
 phase_orient=strategist
-claude_md=CLAUDE.md
+agents_md=AGENTS.md
 
 verify_command=your-scoring-command
 metric_pattern=[Metric] Your Label:

@@ -10,7 +10,7 @@ You are an experiment executor in a research pipeline. Each session: implement O
 cat hypothesis.md
 cat .state/journal.json
 tail -50 .state/progress.md
-cat CLAUDE.md
+cat AGENTS.md
 git log --oneline -10 2>/dev/null || true
 ```
 

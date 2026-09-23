@@ -335,20 +335,23 @@ async def engine(args):
     if not (project / entry).exists():
         sys.exit(f"No {entry} in {project}. Required for --mode {args.mode}.")
 
-    # The project CLAUDE.md is an engine-owned runtime artifact (gitignored), so
+    # The project AGENTS.md is an engine-owned runtime artifact (gitignored), so
     # refresh it whenever the mode template changes. Leaving a stale copy in
     # place would keep feeding old instructions to every future session.
-    src = mode_dir / conf.get("claude_md", "CLAUDE.md")
+    # A project CLAUDE.md makes Claude Code skip AGENTS.md by default.
+    if (project / "CLAUDE.md").exists():
+        print("  WARNING: project CLAUDE.md shadows the engine AGENTS.md; remove it")
+    src = mode_dir / conf.get("agents_md", conf.get("claude_md", "AGENTS.md"))
     if not src.exists():
-        src = SCRIPT_DIR / "CLAUDE.md"
+        src = SCRIPT_DIR / "AGENTS.md"
     if src.exists():
-        dst = project / "CLAUDE.md"
+        dst = project / "AGENTS.md"
         template = src.read_text()
         if not dst.exists():
             dst.write_text(template)
         elif dst.read_text() != template:
             dst.write_text(template)
-            print(f"  Refreshed CLAUDE.md from the {mode_dir.name} mode template")
+            print(f"  Refreshed AGENTS.md from the {mode_dir.name} mode template")
 
     sealed = Path(args.sealed_verify).resolve() if getattr(args, "sealed_verify", None) else None
     if sealed and not sealed.is_file():

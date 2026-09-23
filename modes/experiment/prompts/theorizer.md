@@ -21,7 +21,7 @@ After creating the experiment plan, STOP. The Executor Agent handles implementat
 cat hypothesis.md
 cat .state/journal.json 2>/dev/null || echo '{"experiments": []}'
 cat .state/progress.md 2>/dev/null || true
-cat CLAUDE.md
+cat AGENTS.md
 git log --oneline -10 2>/dev/null || true
 ```
 
